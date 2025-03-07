@@ -1,0 +1,30 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.trimTrailingWhitespace": true,
+		"files.insertFinalNewline": true
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Launch Package",
+				"type": "go",
+				"request": "launch",
+				"mode": "auto",
+				"program": "${fileDirname}"
+			}
+		],
+		"compounds": []
+	},
+	"extensions": {
+		"recommendations": [
+			"golang.go",
+			"redhat.vscode-yaml"
+		]
+	}
+}
