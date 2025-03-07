@@ -14,8 +14,4 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
-    - run: go build -v -o SystemPub ./...
-    - uses: actions/upload-artifact@v4
-      with:
-        name: SystemPub
-        path: SystemPub
+    - run: go build -v SystemPub ./...
