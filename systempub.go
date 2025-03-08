@@ -108,20 +108,20 @@ func main() {
 
 	// Flags and config
 	debug := flag.Bool("debug", false, "sets log level to debug")
-	configPath := flag.String("config", "/etc/systempub.yaml", "MQTT server")
-	mqttServer := flag.String("server", "", "MQTT server")
-	mqttPort := flag.Int("port", 0, "MQTT port")
+	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")
+	mqttServerHost := flag.String("host", "", "MQTT server host")
+	mqttServerPort := flag.Int("port", 0, "MQTT server port")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	config := readConfig(*configPath)
 	if *debug {
 		config.Loglevel = zerolog.DebugLevel
 	}
-	if *mqttServer != "" {
-		config.MQTTServer.Host = *mqttServer
+	if *mqttServerHost != "" {
+		config.MQTTServer.Host = *mqttServerHost
 	}
-	if *mqttPort != 0 {
-		config.MQTTServer.Port = *mqttPort
+	if *mqttServerPort != 0 {
+		config.MQTTServer.Port = *mqttServerPort
 	}
 	zerolog.SetGlobalLevel(config.Loglevel)
 
