@@ -44,3 +44,8 @@ mqttserver:
   port: 1883
 loglevel: warn
 ```
+
+## Home Assistant
+SystemPub registers the host device with Home Assistant and adds the sensors to it.
+If you run SystemPub on your main and backup devices you can tell them apart in Home Assistant via the host name, machine model and OS version.
+![Screenshot](.github/demo_home_assistant.png)
