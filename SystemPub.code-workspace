@@ -26,5 +26,39 @@
 			"golang.go",
 			"redhat.vscode-yaml"
 		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"type": "go",
+				"label": "Static build",
+				"command": "build",
+				"args": [
+					"-a",
+					"-installsuffix",
+					"cgo",
+					"./..."
+				],
+				"problemMatcher": [
+					"$go"
+				],
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				},
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared",
+				},
+				"options": {
+					"env": {
+						"CGO_ENABLED": 0
+					}
+				},
+			}
+		]
 	}
 }
