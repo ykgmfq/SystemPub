@@ -22,10 +22,14 @@ import (
 	"github.com/ykgmfq/SystemPub/sanoid"
 	"github.com/ykgmfq/SystemPub/systemd"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var logger zerolog.Logger
+
+func getDefaultConfig() models.SystemPubConfig {
+	return models.SystemPubConfig{MQTTServer: models.MQTT{Host: "localhost", Port: 1883}, Loglevel: zerolog.InfoLevel}
+}
 
 // Handles server disconnects
 func serverDis(d *paho.Disconnect) {
@@ -85,7 +89,7 @@ func update(context context.Context, cm *autopaho.ConnectionManager, poolConfigs
 
 // Reads the configuration file and returns the application configuration
 func readConfig(location string) models.SystemPubConfig {
-	config := models.SystemPubConfig{MQTTServer: models.MQTT{Host: "localhost", Port: 1883}, Loglevel: zerolog.InfoLevel}
+	config := getDefaultConfig()
 	file, err := os.Open(location)
 	if err != nil {
 		logger.Warn().Err(err).Msg("")
