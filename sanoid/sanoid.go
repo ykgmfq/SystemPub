@@ -11,9 +11,20 @@ import (
 
 var Logger zerolog.Logger
 
+// Interface for injecting mock output in tests
+type commandExecutor interface {
+	Output() ([]byte, error)
+}
+
+// Gets overwritten in tests
+var shellCommandFunc = func(name string, arg ...string) commandExecutor {
+	return exec.Command(name, arg...)
+}
+
 // Runs Sanoid to check one of pool health, capacity and snapshots, and returns true if the output is "OK"
 func getPoolState(p models.Property) bool {
-	out, err := exec.Command("sanoid", "--monitor-"+models.PropStr[p]).Output()
+	cmd := shellCommandFunc("sanoid", "--monitor-"+models.PropStr[p])
+	out, err := cmd.Output()
 	output := string(out)
 	if err != nil {
 		Logger.Error().Err(err).Msg("Failed to execute sanoid")
