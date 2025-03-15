@@ -13,8 +13,7 @@ The pool state and system unit state are published as [binary sensors](https://w
 Autodiscovery is supported, so there is no need for any further configuration in Home Assistant.
 
 ## Installation
-`go build` for now 😉
-
+Grab the binary from the latest release page and copy it to `/usr/local/bin/`.
 Copy `systempub.service` to `/etc/systemd/system` and activate the service:
 ```sh
 systemctl daemon-reload
@@ -48,4 +47,5 @@ loglevel: warn
 ## Home Assistant
 SystemPub registers the host device with Home Assistant and adds the sensors to it.
 If you run SystemPub on your main and backup devices you can tell them apart in Home Assistant via the host name, machine model and OS version.
+
 ![Screenshot](.github/demo_home_assistant.png)
