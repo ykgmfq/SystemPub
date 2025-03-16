@@ -1,0 +1,13 @@
+{
+    "name": "Go",
+    "image": "mcr.microsoft.com/devcontainers/go:1.23",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "golang.go",
+                "redhat.vscode-yaml"
+            ]
+        }
+    },
+    "postCreateCommand": "go version"
+}
