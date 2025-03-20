@@ -38,8 +38,7 @@
 					"-a",
 					"-installsuffix",
 					"cgo",
-					"./..."
-				],
+									],
 				"problemMatcher": [
 					"$go"
 				],
