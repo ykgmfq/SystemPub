@@ -3,16 +3,22 @@
 name: Go
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-    - run: go test -v ./...
-    - run: go build -v ./...
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - run: go build -v
+      - run: go test -v ./...
+      - run: mv SystemPub SystemPub-${{ runner.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          path: SystemPub-${{ runner.arch }}
+          if-no-files-found: error
+          compression-level: 0
