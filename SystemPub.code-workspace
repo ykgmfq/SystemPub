@@ -24,7 +24,8 @@
 	"extensions": {
 		"recommendations": [
 			"golang.go",
-			"redhat.vscode-yaml"
+			"redhat.vscode-yaml",
+			"github.vscode-github-actions"
 		]
 	},
 	"tasks": {
@@ -38,7 +39,7 @@
 					"-a",
 					"-installsuffix",
 					"cgo",
-									],
+				],
 				"problemMatcher": [
 					"$go"
 				],
