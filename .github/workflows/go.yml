@@ -16,8 +16,9 @@ jobs:
           go-version-file: "go.mod"
       - run: go build -v
       - run: go test -v ./...
+      - run: mv SystemPub SystemPub-${{ runner.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          path: SystemPub
+          path: SystemPub-${{ runner.arch }}
           if-no-files-found: error
           compression-level: 0
