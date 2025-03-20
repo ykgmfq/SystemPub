@@ -16,7 +16,7 @@ jobs:
           go-version-file: "go.mod"
       - run: go build -v
       - run: go test -v ./...
-      - run: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           path: SystemPub
           if-no-files-found: error
