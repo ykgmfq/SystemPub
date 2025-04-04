@@ -21,6 +21,7 @@ jobs:
           CGO_ENABLED=0 GOARCH=${{ matrix.arch }} go build -o SystemPub-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
+          name: SystemPub-${{ matrix.arch }}
           path: SystemPub-${{ matrix.arch }}
           if-no-files-found: error
           compression-level: 0
