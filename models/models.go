@@ -59,3 +59,13 @@ type SystemPubConfig struct {
 	MQTTServer MQTT          `json:"mqttserver"`
 	Loglevel   zerolog.Level `json:"loglevel"`
 }
+
+// Default MQTT server configuration
+func MQTTdefault() MQTT {
+	return MQTT{Host: "localhost", Port: 1883}
+}
+
+// Default application configuration
+func SystemPubConfigDefault() SystemPubConfig {
+	return SystemPubConfig{MQTTServer: MQTTdefault(), Loglevel: zerolog.InfoLevel}
+}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/ykgmfq/SystemPub/models"
 )
 
 // Tests for reading configuration from a file
@@ -35,5 +36,5 @@ loglevel: warn
 func TestReadConfigNoFile(t *testing.T) {
 	file := ""
 	config := readConfig(file)
-	assert.Equal(t, config, getDefaultConfig(), "Config mismatch")
+	assert.Equal(t, config, models.SystemPubConfigDefault(), "Config mismatch")
 }
