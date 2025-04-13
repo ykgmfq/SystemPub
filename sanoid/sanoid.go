@@ -5,8 +5,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
+	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
 var Logger zerolog.Logger
@@ -56,4 +58,29 @@ func GetPoolConfigs(device models.Device) map[models.Property]models.MqttConfig 
 		configs[prop] = models.MqttConfig{Name: "Pool " + propStr, StateTopic: topic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: 600, ForceUpdate: true}
 	}
 	return configs
+}
+
+// Reads the current Sanoid states and returns update messages with the sensor states.
+func GetUpdates(poolConfigs map[models.Property]models.MqttConfig) []*paho.Publish {
+	states := GetPoolStates()
+	updates := make([]*paho.Publish, len(states))
+	// get the current state of the pools and the unit via go routines
+	for p, state := range states {
+		update := paho.Publish{
+			QoS:     1,
+			Topic:   poolConfigs[p].StateTopic,
+			Payload: mqttclient.ProblemPayload(state),
+		}
+		updates[p] = &update
+	}
+	return updates
+}
+
+// Returns the discovery messages for the Sanoid sensors.
+func GetDiscoveries(poolConfigs map[models.Property]models.MqttConfig) []*paho.Publish {
+	discoveries := make([]*paho.Publish, len(poolConfigs))
+	for i, config := range poolConfigs {
+		discoveries[i] = mqttclient.GetDiscovery(config)
+	}
+	return discoveries
 }

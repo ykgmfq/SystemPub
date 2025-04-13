@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"os/exec"
 
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
+	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
 var Logger zerolog.Logger
@@ -51,4 +53,21 @@ func GetDevice() models.Device {
 	}
 	device := models.Device{Name: status.Hostname, SWversion: status.OperatingSystemPrettyName, Identifiers: [1]string{status.MachineID}, Manufacturer: status.HardwareVendor, Model: status.HardwareModel}
 	return device
+}
+
+// Reads the current unit state and returns an update message with the sensor state.
+func GetUpdates(unitConfig models.MqttConfig) []*paho.Publish {
+	failed := GetUnitState()
+	update := paho.Publish{
+		QoS:     1,
+		Payload: mqttclient.ProblemPayload(failed),
+		Topic:   unitConfig.StateTopic,
+	}
+	return []*paho.Publish{&update}
+}
+
+// Returns the discovery message for the systemd units binary sensor.
+func GetDiscoveries(unitConfig models.MqttConfig) []*paho.Publish {
+	discovery := mqttclient.GetDiscovery(unitConfig)
+	return []*paho.Publish{discovery}
 }
