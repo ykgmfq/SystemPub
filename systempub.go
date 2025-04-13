@@ -89,7 +89,7 @@ func update(context context.Context, cm *autopaho.ConnectionManager, poolConfigs
 
 // Reads the configuration file and returns the application configuration
 func readConfig(location string) models.SystemPubConfig {
-	config := getDefaultConfig()
+	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
 	if err != nil {
 		logger.Warn().Err(err).Msg("")
