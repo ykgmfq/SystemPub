@@ -1,4 +1,6 @@
 [Unit]
+Description=Monitor ZFS pools and systemd units using Home Assistant and MQTT.
+Documentation=https://github.com/ykgmfq/SystemPub
 After=network.target
 
 [Service]
