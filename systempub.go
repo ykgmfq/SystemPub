@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
@@ -38,6 +39,23 @@ func readConfig(location string) models.SystemPubConfig {
 	}
 	logger.Debug().Str("location", location).Interface("content", config).Msg("")
 	return config
+}
+
+// Systemd watchdog
+func watchdog(ctx context.Context) {
+	watchTime, err := daemon.SdWatchdogEnabled(false)
+	if err != nil || watchTime <= 0 {
+		return
+	}
+	timer := time.NewTicker(watchTime / 2)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
+		}
+	}
 }
 
 func main() {
@@ -108,16 +126,23 @@ func main() {
 		logger.Debug().Msg("Published discovery messages")
 	}
 
+	// Sensor update timer
+	updateTimer := time.NewTicker(5 * time.Minute)
+	defer updateTimer.Stop()
+
 	// Main routine
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
+	daemon.SdNotify(false, daemon.SdNotifyReady)
+	daemon.SdNotify(false, "STATUS=Connecting")
+	go watchdog(ctx)
 	for {
 		select {
 		case <-ctx.Done():
+			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
-		case <-ticker.C:
+		case <-updateTimer.C:
 			updateSensors()
 		case <-client.Conn:
+			daemon.SdNotify(false, "STATUS=Connected to MQTT server")
 			publishDiscovery()
 			updateSensors()
 		}

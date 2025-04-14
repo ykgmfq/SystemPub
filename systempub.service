@@ -4,6 +4,8 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/SystemPub
 Restart=on-failure
+WatchdogSec=1min
+Type=notify
 
 [Install]
 WantedBy=default.target
