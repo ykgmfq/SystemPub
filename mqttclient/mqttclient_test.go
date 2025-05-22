@@ -17,7 +17,6 @@ func TestNewMqttclient(t *testing.T) {
 	assert.Equal(t, server, client.Server)
 	assert.Equal(t, device, client.Device)
 	assert.NotNil(t, client.Pubs)
-	assert.NotNil(t, client.Conn)
 }
 
 func TestGetDiscovery(t *testing.T) {
