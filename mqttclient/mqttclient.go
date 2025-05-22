@@ -8,7 +8,6 @@ import (
 	"net/url"
 
 	"github.com/eclipse/paho.golang/autopaho"
-	"github.com/eclipse/paho.golang/autopaho/queue/memory"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
@@ -21,19 +20,19 @@ var Logger zerolog.Logger
 // It receives to-be-published messages from the main process and sends them to the MQTT server.
 // The main process can listen to the Conn channel to check if the connection is established.
 type Mqttclient struct {
-	Server models.MQTT
-	Device models.Device
-	Pubs   chan *paho.Publish
-	Conn   chan bool
+	Server        models.MQTT
+	Device        models.Device
+	Pubs          chan *paho.Publish
+	ConnListeners []chan bool
 }
 
 // Returns a MQTT client instance with initialized channels
 func NewMqttclient(server models.MQTT, device models.Device) Mqttclient {
 	return Mqttclient{
-		Server: server,
-		Device: device,
-		Pubs:   make(chan *paho.Publish),
-		Conn:   make(chan bool),
+		Server:        server,
+		Device:        device,
+		Pubs:          make(chan *paho.Publish, 4),
+		ConnListeners: make([]chan bool, 0),
 	}
 }
 
@@ -41,7 +40,7 @@ func NewMqttclient(server models.MQTT, device models.Device) Mqttclient {
 func GetDiscovery(config models.MqttConfig) *paho.Publish {
 	payload, err := json.Marshal(config)
 	if err != nil {
-		Logger.Fatal().Err(err).Msg("Failed to marshal discovery message")
+		Logger.Fatal().Str("mod", "mqtt").Err(err).Msg("Failed to marshal discovery message")
 		panic(err)
 	}
 	disovery := paho.Publish{
@@ -70,9 +69,15 @@ func connectError(err error) { Logger.Error().Err(err).Msg("") }
 // Handles server disconnects.
 func serverDis(d *paho.Disconnect) {
 	if d.Properties != nil {
-		Logger.Info().Msg("server requested disconnect: " + d.Properties.ReasonString)
+		Logger.Info().Str("mod", "mqtt").Msg("server requested disconnect: " + d.Properties.ReasonString)
 	} else {
-		Logger.Info().Msg("server requested disconnect; reason code: " + string(d.ReasonCode))
+		Logger.Info().Str("mod", "mqtt").Msg("server requested disconnect; reason code: " + string(d.ReasonCode))
+	}
+}
+
+func (client Mqttclient) notifyListeners() {
+	for _, listener := range client.ConnListeners {
+		listener <- true
 	}
 }
 
@@ -83,34 +88,38 @@ func (client Mqttclient) Serve(ctx context.Context) {
 		Scheme: "mqtt",
 		Host:   fmt.Sprintf("%s:%d", client.Server.Host, client.Server.Port),
 	}
+	mqttctx, _ := context.WithCancel(ctx)
 
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
-		Logger.Info().Msg("Connected to MQTT server")
+		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
 			Subscriptions: []paho.SubscribeOptions{
 				{Topic: "homeassistant/status", QoS: 1},
 			},
 		}
 		if _, err := cm.Subscribe(context.Background(), sub); err != nil {
-			Logger.Error().Err(err).Msg("Failed to subscribe to homeassistant status")
+			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to subscribe to homeassistant status")
 		}
-		Logger.Info().Msg("Subscribed to homeassistant status")
-		client.Conn <- true
+		Logger.Info().Str("mod", "mqtt").Msg("Subscribed to homeassistant status")
+		client.notifyListeners()
 	}
 
 	onpub := []func(paho.PublishReceived) (bool, error){
 		func(pr paho.PublishReceived) (bool, error) {
+			Logger.Debug().Str("mod", "mqtt").Interface("msg", &pr.Packet).Msg("Received message")
 			if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
-				Logger.Info().Msg("Homeassistant is online")
-				client.Conn <- true
+				Logger.Info().Str("mod", "mqtt").Msg("Homeassistant is online")
+				client.notifyListeners()
 			}
 			return true, nil
-		}}
+		},
+	}
+	onpubl := func(p *paho.Publish) {
+		Logger.Debug().Str("mod", "mqtt").Str("topic", p.Topic).Msg("Published message")
+	}
 
 	// Client configuration
-	queue := memory.New()
 	cliCfg := autopaho.ClientConfig{
-		Queue:                         queue,
 		ServerUrls:                    []*url.URL{&serverUrl},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
@@ -122,21 +131,23 @@ func (client Mqttclient) Serve(ctx context.Context) {
 			OnPublishReceived:  onpub,
 			OnClientError:      clientError,
 			OnServerDisconnect: serverDis,
+			PublishHook:        onpubl,
 		},
+		ConnectUsername: fmt.Sprintf("systemPub@%s", client.Device.Name),
 	}
-	Logger.Debug().Str("clientID", cliCfg.ClientID).Msg("")
 
 	// starts process; will reconnect until context cancelled
-	connManage, err := autopaho.NewConnection(ctx, cliCfg)
+	connManage, err := autopaho.NewConnection(mqttctx, cliCfg)
 	if err != nil {
 		panic(err)
 	}
-	if err = connManage.AwaitConnection(ctx); err != nil {
+	if err = connManage.AwaitConnection(mqttctx); err != nil {
 		panic(err)
 	}
+	Logger.Debug().Str("mod", "mqtt").Str("clientID", cliCfg.ClientID).Msg("")
 	for {
 		select {
-		case <-ctx.Done():
+		case <-mqttctx.Done():
 			// Cleanup and exit
 			fmt.Println("Routine stopped")
 			return
@@ -146,9 +157,8 @@ func (client Mqttclient) Serve(ctx context.Context) {
 				fmt.Println("Work channel closed, exiting routine")
 				return
 			}
-			publish := autopaho.QueuePublish{Publish: pub}
-			if err := connManage.PublishViaQueue(ctx, &publish); err != nil {
-				Logger.Error().Err(err).Msg("Failed to publish")
+			if _, err := connManage.Publish(mqttctx, pub); err != nil {
+				Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to publish")
 			}
 		}
 	}

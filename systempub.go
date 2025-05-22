@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
@@ -42,16 +41,21 @@ func readConfig(location string) models.SystemPubConfig {
 }
 
 // Systemd watchdog
-func watchdog(ctx context.Context) {
+func watchdog(ctx context.Context, conn chan bool) {
 	watchTime, err := daemon.SdWatchdogEnabled(false)
 	if err != nil || watchTime <= 0 {
 		return
 	}
+	daemon.SdNotify(false, daemon.SdNotifyReady)
+	daemon.SdNotify(false, "STATUS=Connecting")
 	timer := time.NewTicker(watchTime / 2)
 	for {
 		select {
 		case <-ctx.Done():
+			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
+		case <-conn:
+			daemon.SdNotify(false, "STATUS=Connected to MQTT server")
 		case <-timer.C:
 			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 		}
@@ -84,67 +88,21 @@ func main() {
 	}
 	zerolog.SetGlobalLevel(config.Loglevel)
 
-	// Get system information
-	device := systemd.GetDevice()
-	logger.Debug().Interface("device", device).Msg("")
-
-	// MQTT client
-	client := mqttclient.NewMqttclient(config.MQTTServer, device)
-
-	// Get sensor configuration
-	poolConfigs := sanoid.GetPoolConfigs(device)
-	unitConfig := systemd.GetUnitConfig(device)
-	for _, config := range poolConfigs {
-		logger.Debug().Interface("poolConfig", config).Msg("")
-	}
-	logger.Debug().Interface("unitConfig", unitConfig).Msg("")
-
-	// Discovery messages
-	moduleDiscoveries := [][]*paho.Publish{sanoid.GetDiscoveries(poolConfigs), systemd.GetDiscoveries(unitConfig)}
+	dev := systemd.GetDevice()
+	wdconn := make(chan bool)
+	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev)
+	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute)
+	sanoidClient := sanoid.NewSanoidClient(mqttClient.Pubs, dev, 20*time.Minute)
+	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, sanoidClient.Discover, wdconn)
 
 	// Set connection context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go client.Serve(ctx)
 
-	updateSensors := func() {
-		moduleUpdates := [][]*paho.Publish{sanoid.GetUpdates(poolConfigs), systemd.GetUpdates(unitConfig)}
-		for _, updates := range moduleUpdates {
-			for _, update := range updates {
-				client.Pubs <- update
-			}
-		}
-		logger.Debug().Msg("Updated sensors")
-	}
-	// Publish discovery messages
-	publishDiscovery := func() {
-		for _, discoveries := range moduleDiscoveries {
-			for _, discovery := range discoveries {
-				client.Pubs <- discovery
-			}
-		}
-		logger.Debug().Msg("Published discovery messages")
-	}
+	go mqttClient.Serve(ctx)
+	go systemdClient.Serve(ctx)
+	go sanoidClient.Serve(ctx)
+	go watchdog(ctx, wdconn)
 
-	// Sensor update timer
-	updateTimer := time.NewTicker(5 * time.Minute)
-	defer updateTimer.Stop()
-
-	// Main routine
-	daemon.SdNotify(false, daemon.SdNotifyReady)
-	daemon.SdNotify(false, "STATUS=Connecting")
-	go watchdog(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			daemon.SdNotify(false, daemon.SdNotifyStopping)
-			return
-		case <-updateTimer.C:
-			updateSensors()
-		case <-client.Conn:
-			daemon.SdNotify(false, "STATUS=Connected to MQTT server")
-			publishDiscovery()
-			updateSensors()
-		}
-	}
+	<-ctx.Done()
 }
