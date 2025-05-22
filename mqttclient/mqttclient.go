@@ -104,16 +104,15 @@ func (client Mqttclient) Serve(ctx context.Context) {
 		client.notifyListeners()
 	}
 
-	onpub := []func(paho.PublishReceived) (bool, error){
-		func(pr paho.PublishReceived) (bool, error) {
-			Logger.Debug().Str("mod", "mqtt").Interface("msg", &pr.Packet).Msg("Received message")
-			if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
-				Logger.Info().Str("mod", "mqtt").Msg("Homeassistant is online")
-				client.notifyListeners()
-			}
-			return true, nil
-		},
+	onpub := func(pr paho.PublishReceived) (bool, error) {
+		Logger.Debug().Str("mod", "mqtt").Interface("msg", &pr.Packet).Msg("Received message")
+		if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
+			Logger.Info().Str("mod", "mqtt").Msg("Homeassistant is online")
+			client.notifyListeners()
+		}
+		return true, nil
 	}
+
 	onpubl := func(p *paho.Publish) {
 		Logger.Debug().Str("mod", "mqtt").Str("topic", p.Topic).Msg("Published message")
 	}
@@ -128,7 +127,7 @@ func (client Mqttclient) Serve(ctx context.Context) {
 		OnConnectError:                connectError,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
-			OnPublishReceived:  onpub,
+			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){onpub},
 			OnClientError:      clientError,
 			OnServerDisconnect: serverDis,
 			PublishHook:        onpubl,
