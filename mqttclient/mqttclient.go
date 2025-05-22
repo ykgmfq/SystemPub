@@ -64,7 +64,6 @@ func ProblemPayload(ok bool) []byte {
 func clientError(err error) { Logger.Error().Err(err).Msg("client error") }
 
 // Handles connection errors.
-func connectError(err error) { Logger.Error().Err(err).Msg("") }
 
 // Handles server disconnects.
 func serverDis(d *paho.Disconnect) {
@@ -75,9 +74,9 @@ func serverDis(d *paho.Disconnect) {
 	}
 }
 
-func (client Mqttclient) notifyListeners() {
+func (client Mqttclient) notifyListeners(connected bool) {
 	for _, listener := range client.ConnListeners {
-		listener <- true
+		listener <- connected
 	}
 }
 
@@ -101,16 +100,21 @@ func (client Mqttclient) Serve(ctx context.Context) {
 			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to subscribe to homeassistant status")
 		}
 		Logger.Info().Str("mod", "mqtt").Msg("Subscribed to homeassistant status")
-		client.notifyListeners()
+		client.notifyListeners(true)
 	}
 
 	onpub := func(pr paho.PublishReceived) (bool, error) {
 		Logger.Debug().Str("mod", "mqtt").Interface("msg", &pr.Packet).Msg("Received message")
 		if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
 			Logger.Info().Str("mod", "mqtt").Msg("Homeassistant is online")
-			client.notifyListeners()
+			client.notifyListeners(true)
 		}
 		return true, nil
+	}
+
+	onerr := func(err error) {
+		client.notifyListeners(false)
+		Logger.Error().Err(err).Msg("")
 	}
 
 	onpubl := func(p *paho.Publish) {
@@ -124,7 +128,7 @@ func (client Mqttclient) Serve(ctx context.Context) {
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
 		OnConnectionUp:                onconn,
-		OnConnectError:                connectError,
+		OnConnectError:                onerr,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
 			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){onpub},

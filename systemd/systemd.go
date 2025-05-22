@@ -112,7 +112,10 @@ func (client DbusClient) Serve(ctx context.Context) {
 		case <-dbusctx.Done():
 			cancel()
 			return
-		case <-client.Discover:
+		case ok := <-client.Discover:
+			if !ok {
+				continue
+			}
 			discovery := mqttclient.GetDiscovery(client.Config)
 			client.Pubs <- discovery
 			Logger.Debug().Str("mod", "systemd").Msg("Discovery")

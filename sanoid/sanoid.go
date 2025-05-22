@@ -89,7 +89,10 @@ func (client SanoidClient) Serve(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-client.Discover:
+		case ok := <-client.Discover:
+			if !ok {
+				continue
+			}
 			for _, c := range client.Config {
 				discovery := mqttclient.GetDiscovery(c)
 				client.Pubs <- discovery

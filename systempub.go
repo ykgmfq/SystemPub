@@ -47,15 +47,21 @@ func watchdog(ctx context.Context, conn chan bool) {
 		return
 	}
 	daemon.SdNotify(false, daemon.SdNotifyReady)
-	daemon.SdNotify(false, "STATUS=Connecting")
+	daemon.SdNotify(false, "STATUS=Connecting...")
 	timer := time.NewTicker(watchTime / 2)
 	for {
 		select {
 		case <-ctx.Done():
 			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
-		case <-conn:
-			daemon.SdNotify(false, "STATUS=Connected to MQTT server")
+		case connected := <-conn:
+			var status string
+			if connected {
+				status = "Connected to MQTT server"
+			} else {
+				status = "Disconnected from MQTT server"
+			}
+			daemon.SdNotify(false, "STATUS="+status)
 		case <-timer.C:
 			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 		}
