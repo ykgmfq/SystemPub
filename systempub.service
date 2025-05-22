@@ -8,6 +8,7 @@ ExecStart=/usr/local/bin/SystemPub
 Restart=on-failure
 WatchdogSec=1min
 Type=notify
+NotifyAccess=all
 
 [Install]
 WantedBy=default.target
