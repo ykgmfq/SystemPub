@@ -21,7 +21,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var logger zerolog.Logger
+var (
+	logger  zerolog.Logger
+	version = "1.0.1"
+)
 
 // Reads the configuration file and returns the application configuration
 func readConfig(location string) models.SystemPubConfig {
@@ -80,7 +83,15 @@ func main() {
 	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")
 	mqttServerHost := flag.String("host", "", "MQTT server host")
 	mqttServerPort := flag.Int("port", 0, "MQTT server port")
+	showVersion := flag.Bool("v", false, "show version and exit")
 	flag.Parse()
+
+	logger.Debug().Str("SystemPub version", version).Msg("")
+	if *showVersion {
+		println("SystemPub, version", version)
+		return
+	}
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	config := readConfig(*configPath)
 	if *debug {
