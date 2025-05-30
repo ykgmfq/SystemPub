@@ -31,15 +31,15 @@ func readConfig(location string) models.SystemPubConfig {
 	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
 	if err != nil {
-		logger.Warn().Err(err).Msg("")
+		logger.Warn().Str("mod", "main").Err(err).Msg("")
 		return config
 	}
 	defer file.Close()
 	if err = yaml.NewDecoder(file).Decode(&config); err != nil {
-		logger.Fatal().Err(err).Msg("Malformed configuration file")
+		logger.Fatal().Str("mod", "main").Err(err).Msg("Malformed configuration file")
 		panic(err)
 	}
-	logger.Debug().Str("location", location).Interface("content", config).Msg("")
+	logger.Debug().Str("mod", "main").Str("location", location).Interface("content", config).Msg("")
 	return config
 }
 
@@ -86,7 +86,7 @@ func main() {
 	showVersion := flag.Bool("v", false, "show version and exit")
 	flag.Parse()
 
-	logger.Debug().Str("SystemPub version", version).Msg("")
+	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
 	if *showVersion {
 		println("SystemPub, version", version)
 		return
