@@ -122,6 +122,10 @@ func (client Mqttclient) Serve(ctx context.Context) {
 	}
 
 	// Client configuration
+	user := client.Server.User
+	if client.Server.User == "" {
+		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
+	}
 	cliCfg := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{&serverUrl},
 		KeepAlive:                     20,
@@ -136,10 +140,11 @@ func (client Mqttclient) Serve(ctx context.Context) {
 			OnServerDisconnect: serverDis,
 			PublishHook:        onpubl,
 		},
-		ConnectUsername: fmt.Sprintf("systemPub@%s", client.Device.Name),
+		ConnectUsername: user,
+		ConnectPassword: []byte(client.Server.Password),
 	}
+	Logger.Debug().Str("mod", "mqtt").Str("username", cliCfg.ConnectUsername).Str("clientID", cliCfg.ClientID).Msg("")
 
-	// starts process; will reconnect until context cancelled
 	connManage, err := autopaho.NewConnection(mqttctx, cliCfg)
 	if err != nil {
 		panic(err)
@@ -147,7 +152,6 @@ func (client Mqttclient) Serve(ctx context.Context) {
 	if err = connManage.AwaitConnection(mqttctx); err != nil {
 		panic(err)
 	}
-	Logger.Debug().Str("mod", "mqtt").Str("clientID", cliCfg.ClientID).Msg("")
 	for {
 		select {
 		case <-mqttctx.Done():

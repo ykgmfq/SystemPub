@@ -51,8 +51,10 @@ type Hostnamectl struct {
 }
 
 type MQTT struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
 }
 
 type SystemPubConfig struct {
