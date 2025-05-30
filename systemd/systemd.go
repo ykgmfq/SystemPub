@@ -39,6 +39,7 @@ func GetDevice() models.Device {
 	return device
 }
 
+// Client for systemd units monitoring via D-Bus.
 type DbusClient struct {
 	Conn     chan bool
 	Discover chan bool
@@ -47,6 +48,7 @@ type DbusClient struct {
 	Pubs     chan *paho.Publish
 }
 
+// Returns a new DbusClient instance with initialized channels and configuration.
 func NewDbusclient(pubs chan *paho.Publish, device models.Device, interval time.Duration) DbusClient {
 	return DbusClient{
 		Pubs:     pubs,
@@ -57,6 +59,7 @@ func NewDbusclient(pubs chan *paho.Publish, device models.Device, interval time.
 	}
 }
 
+// Queries the systemd D-Bus for failed units and publishes the state to MQTT.
 func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, error) {
 	states, err := conn.ListUnitsByPatternsContext(ctx, []string{"failed"}, []string{"*"})
 	if err != nil {
@@ -78,6 +81,7 @@ func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, err
 	return ok, nil
 }
 
+// Long-running routine that handles the D-Bus connection and publishes messages.
 func (client DbusClient) Serve(ctx context.Context) {
 	dbusctx, cancel := context.WithCancel(ctx)
 	conn, err := dbus.NewWithContext(dbusctx)

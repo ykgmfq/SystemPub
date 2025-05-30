@@ -63,8 +63,6 @@ func ProblemPayload(ok bool) []byte {
 // Handles client-side errors.
 func clientError(err error) { Logger.Error().Err(err).Msg("client error") }
 
-// Handles connection errors.
-
 // Handles server disconnects.
 func serverDis(d *paho.Disconnect) {
 	if d.Properties != nil {
@@ -74,6 +72,7 @@ func serverDis(d *paho.Disconnect) {
 	}
 }
 
+// Notifies all registered listeners about the connection status to Home Assitant.
 func (client Mqttclient) notifyListeners(connected bool) {
 	for _, listener := range client.ConnListeners {
 		listener <- connected

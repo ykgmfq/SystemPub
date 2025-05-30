@@ -1,7 +1,9 @@
+// Data models for SystemPub
 package models
 
 import "github.com/rs/zerolog"
 
+// Device information for Home Assistant autodiscovery
 type Device struct {
 	Name         string    `json:"name"`
 	Model        string    `json:"model"`
@@ -10,12 +12,7 @@ type Device struct {
 	Identifiers  [1]string `json:"identifiers"`
 }
 
-type SanoidState struct {
-	Health    bool
-	Snapshots bool
-	Capacity  bool
-}
-
+// Sensor configuration for Home Assistant autodiscovery
 type MqttConfig struct {
 	Name          string `json:"name"`
 	DeviceClass   string `json:"device_class"`
@@ -27,6 +24,7 @@ type MqttConfig struct {
 	ForceUpdate   bool   `json:"force_update"`
 }
 
+// ZFS pool properties
 type Property int
 
 const (
@@ -42,6 +40,7 @@ var PropStr = map[Property]string{
 	Capacity: "capacity",
 }
 
+// Ouput of `hostnamectl` command
 type Hostnamectl struct {
 	Hostname                  string `json:"Hostname"`
 	OperatingSystemPrettyName string `json:"OperatingSystemPrettyName"`
@@ -50,6 +49,7 @@ type Hostnamectl struct {
 	HardwareModel             string `json:"HardwareModel"`
 }
 
+// MQTT server location and credentials
 type MQTT struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
@@ -57,6 +57,7 @@ type MQTT struct {
 	Password string `json:"password"`
 }
 
+// Application configuration, as read from the configuration file
 type SystemPubConfig struct {
 	MQTTServer MQTT          `json:"mqttserver"`
 	Loglevel   zerolog.Level `json:"loglevel"`

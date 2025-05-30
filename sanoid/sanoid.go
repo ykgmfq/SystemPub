@@ -52,6 +52,7 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 	return configs
 }
 
+// Checks the state of pools using Sanoid commands and publishes the results to MQTT.
 type SanoidClient struct {
 	Discover chan bool
 	Interval time.Duration
@@ -59,6 +60,7 @@ type SanoidClient struct {
 	Pubs     chan *paho.Publish
 }
 
+// Returns a new Sanoid client.
 func NewSanoidClient(pubs chan *paho.Publish, device models.Device, interval time.Duration) SanoidClient {
 	return SanoidClient{
 		Pubs:     pubs,
@@ -68,6 +70,7 @@ func NewSanoidClient(pubs chan *paho.Publish, device models.Device, interval tim
 	}
 }
 
+// Updates the state of all pools by running Sanoid commands and publishing the results to MQTT.
 func (client SanoidClient) update() error {
 	for property, config := range client.Config {
 		state, err := getPoolState(property)
@@ -83,6 +86,7 @@ func (client SanoidClient) update() error {
 	return nil
 }
 
+// Long-running routine that handles the Sanoid client and publishes messages.
 func (client SanoidClient) Serve(ctx context.Context) {
 	updateTimer := time.NewTicker(client.Interval)
 	for {
