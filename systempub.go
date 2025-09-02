@@ -23,7 +23,7 @@ import (
 
 var (
 	logger  zerolog.Logger
-	version = "1.0.1"
+	version = "1.1.0"
 )
 
 // Reads the configuration file and returns the application configuration
