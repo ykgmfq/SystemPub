@@ -86,7 +86,6 @@ func main() {
 	showVersion := flag.Bool("v", false, "show version and exit")
 	flag.Parse()
 
-	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
 	if *showVersion {
 		println("SystemPub, version", version)
 		return
@@ -104,6 +103,7 @@ func main() {
 		config.MQTTServer.Port = *mqttServerPort
 	}
 	zerolog.SetGlobalLevel(config.Loglevel)
+	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
 
 	dev := systemd.GetDevice()
 	wdconn := make(chan bool)
