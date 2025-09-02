@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/eclipse/paho.golang v0.22.0
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
