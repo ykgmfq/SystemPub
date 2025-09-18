@@ -9,17 +9,14 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./.github/scripts
     steps:
       - uses: actions/checkout@v4
       - name: Update devcontainer.json if needed
-        run: ./update-devcontainer.sh
+        run: ./.github/scripts/update-devcontainer.sh
         id: update_devcontainer
       - name: Commit changes
         if: steps.update_devcontainer.outputs.result == 'updated'
-        run: ./commit-devcontainer-update.sh ${{ steps.update_devcontainer.outputs.tag }}
+        run: ./.github/scripts/commit-devcontainer-update.sh ${{ steps.update_devcontainer.outputs.tag }}
       - name: Create Pull Request
         if: steps.update_devcontainer.outputs.result == 'updated'
         uses: peter-evans/create-pull-request@v5
