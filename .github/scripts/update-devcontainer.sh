@@ -6,9 +6,11 @@ LATEST_TAG=$(curl --silent https://mcr.microsoft.com/v2/devcontainers/go/tags/li
 CURRENT_TAG=$(jq --raw-output '.image' .devcontainer/devcontainer.json | cut --delimiter=":" --fields=2)
 
 if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
-  exit 2
+  echo result=up-to-date >> $GITHUB_OUTPUT
+  exit 0
 fi
 jq --arg latest_image "mcr.microsoft.com/devcontainers/go:$LATEST_TAG" '.image = $latest_image' .devcontainer/devcontainer.json > /tmp/devcontainer.json
 mv /tmp/devcontainer.json .devcontainer/
 echo $LATEST_TAG
 echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+echo result=updated >> $GITHUB_OUTPUT

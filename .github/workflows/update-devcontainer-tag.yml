@@ -18,10 +18,10 @@ jobs:
         run: ./update-devcontainer.sh
         id: update_devcontainer
       - name: Commit changes
-        if: steps.update_devcontainer.outcome == 'success'
+        if: steps.update_devcontainer.outputs.result == 'updated'
         run: ./commit-devcontainer-update.sh ${{ steps.update_devcontainer.outputs.tag }}
       - name: Create Pull Request
-        if: steps.update_devcontainer.outcome == 'success'
+        if: steps.update_devcontainer.outputs.result == 'updated'
         uses: peter-evans/create-pull-request@v5
         with:
           branch: devcontainer-${{ steps.update_devcontainer.outputs.tag }}
