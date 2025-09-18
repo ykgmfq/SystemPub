@@ -24,3 +24,4 @@ jobs:
           branch: devcontainer-${{ steps.update_devcontainer.outputs.tag }}
           title: Update devcontainer to Go ${{ steps.update_devcontainer.outputs.tag }}
           body: https://mcr.microsoft.com/en-us/artifact/mar/devcontainers/go/tags
+          base: main
