@@ -1,14 +1,14 @@
 {
-    "name": "Go",
-    "image": "mcr.microsoft.com/devcontainers/go:1.24",
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "golang.go",
-                "redhat.vscode-yaml",
-                "github.vscode-github-actions"
-            ]
-        }
-    },
-    "postCreateCommand": "go version"
+  "name": "Go",
+  "image": "mcr.microsoft.com/devcontainers/go:1.25",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions"
+      ]
+    }
+  },
+  "postCreateCommand": "go version"
 }
