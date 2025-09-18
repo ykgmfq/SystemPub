@@ -1,0 +1,29 @@
+name: Update DevContainer
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Monday 04:00 UTC
+  workflow_dispatch:
+jobs:
+  update-tag:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./github/scripts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update devcontainer.json if needed
+        run: ./update-devcontainer.sh
+        id: update_devcontainer
+      - name: Commit changes
+        if: steps.update_devcontainer.outcome == 'success'
+        run: ./commit-devcontainer-update.sh ${{ steps.update_devcontainer.outputs.tag }}
+      - name: Create Pull Request
+        if: steps.update_devcontainer.outcome == 'success'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          branch: devcontainer-${{ steps.update_devcontainer.outputs.tag }}
+          title: Update devcontainer to Go ${{ steps.update_devcontainer.outputs.tag }}
+          body: https://mcr.microsoft.com/en-us/artifact/mar/devcontainers/go/tags
