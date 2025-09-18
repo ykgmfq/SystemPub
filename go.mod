@@ -1,8 +1,6 @@
 module github.com/ykgmfq/SystemPub
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24
 
 require (
 	github.com/coreos/go-systemd/v22 v22.6.0
