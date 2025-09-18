@@ -14,9 +14,6 @@ jobs:
       - name: Update devcontainer.json if needed
         run: ./.github/scripts/update-devcontainer.sh
         id: update_devcontainer
-      - name: Commit changes
-        if: steps.update_devcontainer.outputs.result == 'updated'
-        run: ./.github/scripts/commit-devcontainer-update.sh ${{ steps.update_devcontainer.outputs.tag }}
       - name: Create Pull Request
         if: steps.update_devcontainer.outputs.result == 'updated'
         uses: peter-evans/create-pull-request@v5
@@ -24,4 +21,4 @@ jobs:
           branch: devcontainer-${{ steps.update_devcontainer.outputs.tag }}
           title: Update devcontainer to Go ${{ steps.update_devcontainer.outputs.tag }}
           body: https://mcr.microsoft.com/en-us/artifact/mar/devcontainers/go/tags
-          base: main
+          commit-message: Update devcontainer to Go ${{ steps.update_devcontainer.outputs.tag }}
