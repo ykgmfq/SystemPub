@@ -16,7 +16,7 @@ jobs:
         id: update_devcontainer
       - name: Create Pull Request
         if: steps.update_devcontainer.outputs.result == 'updated'
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v7
         with:
           branch: devcontainer-${{ steps.update_devcontainer.outputs.tag }}
           title: Update devcontainer to Go ${{ steps.update_devcontainer.outputs.tag }}
