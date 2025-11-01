@@ -22,7 +22,7 @@ jobs:
           go-version-file: "go.mod"
       - run: |
           just build ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: systempub-${{ matrix.arch }}
           path: /tmp/systempub-${{ matrix.arch }}
