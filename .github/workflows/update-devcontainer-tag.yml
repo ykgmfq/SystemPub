@@ -10,7 +10,7 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Update devcontainer.json if needed
         run: ./.github/scripts/update-devcontainer.sh
         id: update_devcontainer
