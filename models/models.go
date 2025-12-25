@@ -5,7 +5,22 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
 )
+
+// Custom URL type to handle YAML decoding
+type YAMLURL struct {
+	*url.URL
+}
+
+func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
+	parsed, err := url.Parse(value.Value)
+	if err != nil {
+		return err
+	}
+	u.URL = parsed
+	return nil
+}
 
 // Device information for Home Assistant autodiscovery
 type Device struct {
@@ -55,7 +70,7 @@ type Hostnamectl struct {
 
 // MQTT server location and credentials
 type MQTT struct {
-	Host     url.URL `yaml:"host"`
+	Host     YAMLURL `yaml:"host"`
 	User     string  `yaml:"user"`
 	Password string  `yaml:"password"`
 }
@@ -68,7 +83,7 @@ type SystemPubConfig struct {
 
 // Default MQTT server configuration
 func MQTTdefault() MQTT {
-	return MQTT{Host: url.URL{Scheme: "mqtt", Host: "localhost:1883"}}
+	return MQTT{Host: YAMLURL{&url.URL{Scheme: "mqtt", Host: "localhost:1883"}}}
 }
 
 // Default application configuration

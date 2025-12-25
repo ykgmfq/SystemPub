@@ -6,7 +6,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"github.com/ykgmfq/SystemPub/models"
 )
 
 // Tests for reading configuration from a file
@@ -24,15 +23,9 @@ loglevel: warn
 	assert.NoError(t, err, "Failed to write to temporary configuration file")
 	tempFile.Close()
 
-	config := readConfig(tempFile.Name())
+	config, err := readConfig(tempFile.Name())
+	assert.NoError(t, err, "Failed to read config")
 
 	assert.Equal(t, "mqtt://192.168.0.3:8080", config.MQTTServer.Host.String(), "Host value mismatch")
 	assert.Equal(t, zerolog.WarnLevel, config.Loglevel, "Log level mismatch")
-}
-
-// Tests for default config if no file is provided
-func TestReadConfigNoFile(t *testing.T) {
-	file := ""
-	config := readConfig(file)
-	assert.Equal(t, config, models.SystemPubConfigDefault(), "Config mismatch")
 }

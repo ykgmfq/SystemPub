@@ -28,20 +28,20 @@ var (
 )
 
 // Reads the configuration file and returns the application configuration
-func readConfig(location string) models.SystemPubConfig {
+func readConfig(location string) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
 	if err != nil {
 		logger.Warn().Str("mod", "main").Err(err).Msg("")
-		return config
+		return config, err
 	}
 	defer file.Close()
 	if err = yaml.NewDecoder(file).Decode(&config); err != nil {
-		logger.Fatal().Str("mod", "main").Err(err).Msg("Malformed configuration file")
-		panic(err)
+		logger.Error().Str("mod", "main").Err(err).Msg("Malformed configuration file")
+		return config, err
 	}
 	logger.Debug().Str("mod", "main").Str("location", location).Interface("content", config).Msg("")
-	return config
+	return config, nil
 }
 
 // Systemd watchdog
@@ -92,13 +92,23 @@ func main() {
 	}
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	config := readConfig(*configPath)
+
+	// Configuration
+	config := models.SystemPubConfigDefault()
+	if *configPath != "" {
+		conf, err := readConfig(*configPath)
+		if err != nil {
+			logger.Fatal().Str("mod", "main").Err(err).Msg("Could not read configuration file")
+		}
+		config = conf
+	}
+
 	if *debug {
 		config.Loglevel = zerolog.DebugLevel
 	}
 	if *mqttServerHost != "" {
 		if parsedURL, err := url.Parse(*mqttServerHost); err == nil {
-			config.MQTTServer.Host = *parsedURL
+			config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
 		} else {
 			logger.Error().Str("mod", "main").Err(err).Msg("Malformed MQTT server URL")
 		}

@@ -119,7 +119,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
 	}
 	cliCfg := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{&client.Server.Host},
+		ServerUrls:                    []*url.URL{client.Server.Host.URL},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
