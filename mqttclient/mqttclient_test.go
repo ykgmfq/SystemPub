@@ -40,3 +40,12 @@ func TestProblemPayload(t *testing.T) {
 	assert.Equal(t, []byte("OFF"), ProblemPayload(true))
 	assert.Equal(t, []byte("ON"), ProblemPayload(false))
 }
+
+func TestGetTlsConfig(t *testing.T) {
+	cfg, err := getTlsConfig()
+	if err != nil {
+		t.Skipf("Skipping test: SystemCertPool unavailable: %v", err)
+	}
+	assert.NotNil(t, cfg)
+	assert.NotNil(t, cfg.RootCAs)
+}
