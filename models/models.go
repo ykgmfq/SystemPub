@@ -1,7 +1,26 @@
 // Data models for SystemPub
 package models
 
-import "github.com/rs/zerolog"
+import (
+	"net/url"
+
+	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
+)
+
+// Custom URL type to handle YAML decoding
+type YAMLURL struct {
+	*url.URL
+}
+
+func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
+	parsed, err := url.Parse(value.Value)
+	if err != nil {
+		return err
+	}
+	u.URL = parsed
+	return nil
+}
 
 // Device information for Home Assistant autodiscovery
 type Device struct {
@@ -51,21 +70,20 @@ type Hostnamectl struct {
 
 // MQTT server location and credentials
 type MQTT struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
-	Password string `json:"password"`
+	Host     YAMLURL `yaml:"host"`
+	User     string  `yaml:"user"`
+	Password string  `yaml:"password"`
 }
 
 // Application configuration, as read from the configuration file
 type SystemPubConfig struct {
-	MQTTServer MQTT          `json:"mqttserver"`
-	Loglevel   zerolog.Level `json:"loglevel"`
+	MQTTServer MQTT          `yaml:"mqttserver"`
+	Loglevel   zerolog.Level `yaml:"loglevel"`
 }
 
 // Default MQTT server configuration
 func MQTTdefault() MQTT {
-	return MQTT{Host: "localhost", Port: 1883}
+	return MQTT{Host: YAMLURL{&url.URL{Scheme: "mqtt", Host: "localhost:1883"}}}
 }
 
 // Default application configuration

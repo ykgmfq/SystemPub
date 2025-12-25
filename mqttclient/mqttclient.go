@@ -79,15 +79,8 @@ func (client Mqttclient) notifyListeners(connected bool) {
 	}
 }
 
-// Long-running routine that handles the MQTT connection and publishes messages.
-func (client Mqttclient) Serve(ctx context.Context) {
-	// Set connection context
-	serverUrl := url.URL{
-		Scheme: "mqtt",
-		Host:   fmt.Sprintf("%s:%d", client.Server.Host, client.Server.Port),
-	}
-	mqttctx, _ := context.WithCancel(ctx)
-
+// Creates a new MQTT connection with the given configuration.
+func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
@@ -126,7 +119,7 @@ func (client Mqttclient) Serve(ctx context.Context) {
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
 	}
 	cliCfg := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{&serverUrl},
+		ServerUrls:                    []*url.URL{client.Server.Host.URL},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
@@ -144,12 +137,21 @@ func (client Mqttclient) Serve(ctx context.Context) {
 	}
 	Logger.Debug().Str("mod", "mqtt").Str("username", cliCfg.ConnectUsername).Str("clientID", cliCfg.ClientID).Msg("")
 
-	connManage, err := autopaho.NewConnection(mqttctx, cliCfg)
+	Logger.Debug().Str("mod", "mqtt").Msg("Starting connection")
+	connManage, err := autopaho.NewConnection(ctx, cliCfg)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	if err = connManage.AwaitConnection(mqttctx); err != nil {
-		panic(err)
+	return connManage, nil
+}
+
+// Long-running routine that handles the MQTT connection and publishes messages.
+func (client Mqttclient) Serve(ctx context.Context) {
+	mqttctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	connManage, err := client.createConnection(mqttctx)
+	if err != nil {
+		return
 	}
 	for {
 		select {

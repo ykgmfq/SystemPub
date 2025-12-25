@@ -31,16 +31,13 @@ Usage of SystemPub:
         sets log level to debug
   -host string
         MQTT server host
-  -port int
-        MQTT server port
 ```
 
 The options can also be set in the configuration file:
 
 ```yaml
 mqttserver:
-  host: 192.168.0.3
-  port: 1883
+  host: mqtt://192.168.0.3:1883
 loglevel: warn
 ```
 
