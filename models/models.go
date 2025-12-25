@@ -52,7 +52,6 @@ type Hostnamectl struct {
 // MQTT server location and credentials
 type MQTT struct {
 	Host     string `json:"host"`
-	Port     int    `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
 }
@@ -65,7 +64,7 @@ type SystemPubConfig struct {
 
 // Default MQTT server configuration
 func MQTTdefault() MQTT {
-	return MQTT{Host: "localhost", Port: 1883}
+	return MQTT{Host: "mqtt://localhost:1883"}
 }
 
 // Default application configuration

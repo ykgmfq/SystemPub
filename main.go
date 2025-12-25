@@ -82,7 +82,6 @@ func main() {
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")
 	mqttServerHost := flag.String("host", "", "MQTT server host")
-	mqttServerPort := flag.Int("port", 0, "MQTT server port")
 	showVersion := flag.Bool("v", false, "show version and exit")
 	flag.Parse()
 
@@ -98,9 +97,6 @@ func main() {
 	}
 	if *mqttServerHost != "" {
 		config.MQTTServer.Host = *mqttServerHost
-	}
-	if *mqttServerPort != 0 {
-		config.MQTTServer.Port = *mqttServerPort
 	}
 	zerolog.SetGlobalLevel(config.Loglevel)
 	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
