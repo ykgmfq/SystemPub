@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,6 +28,20 @@ var (
 	logger  zerolog.Logger
 	version = "1.2.0"
 )
+
+// Reads the MQTT password from systemd credentials directory
+// Falls back to the password in the config if credential is not available
+func loadMQTTPassword() (string, error) {
+	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
+	if credDir == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(filepath.Join(credDir, "mqtt"))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
 
 // Reads the configuration file and returns the application configuration
 func readConfig(location string) (models.SystemPubConfig, error) {
@@ -101,6 +117,18 @@ func main() {
 			logger.Fatal().Str("mod", "main").Err(err).Msg("Could not read configuration file")
 		}
 		config = conf
+	}
+
+	// Load MQTT password from credentials directory if available
+	password, err := loadMQTTPassword()
+	if err != nil {
+		logger.Fatal().Str("mod", "main").Err(err).Msg("Could not read password from credentials directory")
+	}
+	if password != "" {
+		if config.MQTTServer.Password != "" {
+			logger.Warn().Str("mod", "main").Msg("Overriding MQTT password from configuration file with credentials directory")
+		}
+		config.MQTTServer.Password = password
 	}
 
 	if *debug {

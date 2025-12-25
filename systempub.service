@@ -9,6 +9,7 @@ Restart=on-failure
 WatchdogSec=1min
 Type=notify
 NotifyAccess=all
+#LoadCredential=mqtt:/etc/mqtt_pw.txt
 
 [Install]
 WantedBy=default.target
