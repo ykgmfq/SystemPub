@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -96,7 +97,11 @@ func main() {
 		config.Loglevel = zerolog.DebugLevel
 	}
 	if *mqttServerHost != "" {
-		config.MQTTServer.Host = *mqttServerHost
+		if parsedURL, err := url.Parse(*mqttServerHost); err == nil {
+			config.MQTTServer.Host = *parsedURL
+		} else {
+			logger.Error().Str("mod", "main").Err(err).Msg("Malformed MQTT server URL")
+		}
 	}
 	zerolog.SetGlobalLevel(config.Loglevel)
 	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")

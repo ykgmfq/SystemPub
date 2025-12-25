@@ -14,8 +14,7 @@ func TestReadConfig(t *testing.T) {
 	// Create a temporary configuration file
 	configData := `
 mqttserver:
-  host: 192.168.0.3
-  port: 1883
+  host: mqtt://192.168.0.3:8080
 loglevel: warn
 `
 	tempFile, err := os.CreateTemp("", "testconfig.yaml")
@@ -27,8 +26,7 @@ loglevel: warn
 
 	config := readConfig(tempFile.Name())
 
-	assert.Equal(t, "192.168.0.3", config.MQTTServer.Host, "Host value mismatch")
-	assert.Equal(t, 1883, config.MQTTServer.Port, "Port value mismatch")
+	assert.Equal(t, "mqtt://192.168.0.3:8080", config.MQTTServer.Host.String(), "Host value mismatch")
 	assert.Equal(t, zerolog.WarnLevel, config.Loglevel, "Log level mismatch")
 }
 

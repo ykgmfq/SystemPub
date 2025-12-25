@@ -1,7 +1,11 @@
 // Data models for SystemPub
 package models
 
-import "github.com/rs/zerolog"
+import (
+	"net/url"
+
+	"github.com/rs/zerolog"
+)
 
 // Device information for Home Assistant autodiscovery
 type Device struct {
@@ -51,20 +55,20 @@ type Hostnamectl struct {
 
 // MQTT server location and credentials
 type MQTT struct {
-	Host     string `json:"host"`
-	User     string `json:"user"`
-	Password string `json:"password"`
+	Host     url.URL `yaml:"host"`
+	User     string  `yaml:"user"`
+	Password string  `yaml:"password"`
 }
 
 // Application configuration, as read from the configuration file
 type SystemPubConfig struct {
-	MQTTServer MQTT          `json:"mqttserver"`
-	Loglevel   zerolog.Level `json:"loglevel"`
+	MQTTServer MQTT          `yaml:"mqttserver"`
+	Loglevel   zerolog.Level `yaml:"loglevel"`
 }
 
 // Default MQTT server configuration
 func MQTTdefault() MQTT {
-	return MQTT{Host: "mqtt://localhost:1883"}
+	return MQTT{Host: url.URL{Scheme: "mqtt", Host: "localhost:1883"}}
 }
 
 // Default application configuration

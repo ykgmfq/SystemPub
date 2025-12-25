@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewMqttclient(t *testing.T) {
-	server := models.MQTT{Host: "mqtt://localhost:1883"}
+	server := models.SystemPubConfigDefault().MQTTServer
 	device := models.Device{Name: "TestDevice", Identifiers: [1]string{"1234"}}
 
 	client := NewMqttclient(server, device)

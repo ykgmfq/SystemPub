@@ -81,13 +81,6 @@ func (client Mqttclient) notifyListeners(connected bool) {
 
 // Creates a new MQTT connection with the given configuration.
 func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
-	// Url parsing
-	parsedURL, err := url.Parse(client.Server.Host)
-	if err != nil {
-		return nil, err
-	}
-	Logger.Info().Str("mod", "mqtt").Str("url", parsedURL.String()).Msg("")
-
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
@@ -126,7 +119,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
 	}
 	cliCfg := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{parsedURL},
+		ServerUrls:                    []*url.URL{&client.Server.Host},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
