@@ -41,6 +41,16 @@ mqttserver:
 loglevel: warn
 ```
 
+For remote backup machines, you can set your broker to accept WebSocket connections. Then configure a subdomain on your ingress:
+
+```yaml
+mqttserver:
+  host: wss://mqtt.yourdomain.net
+  username: backup1
+```
+
+Pass the password as a [Service Credential](https://systemd.io/CREDENTIALS) named `mqtt` as shown in the service file in this repo.
+
 ## Home Assistant
 SystemPub registers the host device with Home Assistant and adds the sensors to it.
 If you run SystemPub on your main and backup devices you can tell them apart in Home Assistant via the host name, machine model and OS version.
