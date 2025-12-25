@@ -148,6 +148,8 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		SessionExpiryInterval:         60,
 		OnConnectionUp:                onconn,
 		OnConnectError:                onerr,
+		Errors:                        &Logger,
+		Debug:                         &Logger,
 		TlsCfg:                        tlsConfig,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
