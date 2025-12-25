@@ -3,6 +3,8 @@ package mqttclient
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -34,6 +36,15 @@ func NewMqttclient(server models.MQTT, device models.Device) Mqttclient {
 		Pubs:          make(chan *paho.Publish, 4),
 		ConnListeners: make([]chan bool, 0),
 	}
+}
+
+func getTlsConfig() (*tls.Config, error) {
+	rootCAPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	var tlsConfig = tls.Config{RootCAs: rootCAPool}
+	return &tlsConfig, nil
 }
 
 // Returns a discovery message for a given sensor
@@ -81,6 +92,18 @@ func (client Mqttclient) notifyListeners(connected bool) {
 
 // Creates a new MQTT connection with the given configuration.
 func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
+	// TLS configuration
+	var tlsConfig *tls.Config
+	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
+		Logger.Info().Str("mod", "mqtt").Msg("Using secure connection")
+		if conf, err := getTlsConfig(); err != nil {
+			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to get TLS config")
+			return nil, err
+		} else {
+			tlsConfig = conf
+		}
+	}
+
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
@@ -125,6 +148,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		SessionExpiryInterval:         60,
 		OnConnectionUp:                onconn,
 		OnConnectError:                onerr,
+		TlsCfg:                        tlsConfig,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
 			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){onpub},
