@@ -3,8 +3,8 @@ package sanoid
 
 import (
 	"context"
+	"errors"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/eclipse/paho.golang/paho"
@@ -17,7 +17,7 @@ var Logger zerolog.Logger
 
 // Interface for injecting mock output in tests
 type commandExecutor interface {
-	Output() ([]byte, error)
+	Run() error
 }
 
 // Gets overwritten in tests
@@ -25,19 +25,38 @@ var shellCommandFunc = func(name string, arg ...string) commandExecutor {
 	return exec.Command(name, arg...)
 }
 
+// Maps Sanoid exit codes to human-readable states
+func sanoidState(exit int) string {
+	if exit > 4 || exit < 0 {
+		return "UNKNOWN"
+	}
+	var sanoidExitLevels = map[int]string{
+		0: "Ok",
+		1: "Warning",
+		2: "Critical",
+		3: "Error",
+	}
+	return sanoidExitLevels[exit]
+}
+
 // Runs Sanoid to check one of pool health, capacity and snapshots, and returns true if the output is "OK"
 func getPoolState(p models.Property) (bool, error) {
 	cmd := shellCommandFunc("sanoid", "--monitor-"+models.PropStr[p])
-	out, err := cmd.Output()
-	output := string(out)
-	if err != nil {
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) {
 		return false, err
 	}
-	ok := strings.HasPrefix(output, "OK")
-	if !ok {
-		Logger.Warn().Str("mod", "sanoid").Str("sanoid output", output).Msg("")
+	exitCode := exitError.ExitCode()
+	if exitCode > 4 {
+		return false, err
 	}
-	return ok, nil
+	Logger.Warn().Str("mod", "sanoid").Str("state", sanoidState(exitCode)).Msg("")
+	return false, nil
+
 }
 
 // Gathers autodiscovery struct for the binary health, capacity and snapshot sensors
