@@ -1,45 +1,71 @@
 package sanoid
 
 import (
+	"errors"
 	"fmt"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/ykgmfq/SystemPub/models"
 )
 
-// Used to stub the return of the Output method
+// Helper function to create a real ExitError with the specified exit code
+func makeExitError(code int) *exec.ExitError {
+	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr
+	}
+	return nil
+}
+
+// Used to stub the return of the Run method
 type MockCommandExecutor struct {
-	output string
-	error  error
+	err error
 }
 
 // Implements the commandExecutor interface
-func (m *MockCommandExecutor) Output() ([]byte, error) {
-	return []byte(m.output), m.error
+func (m *MockCommandExecutor) Run() error {
+	return m.err
 }
 
-// Tests sanoid output parsing for checking pool health
-func TestGetPoolState(t *testing.T) {
-	// OK
-	shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-		return &MockCommandExecutor{output: "OK \n"}
-	}
+// Tests for clean sanoid exit indicating healthy pool
+func TestGetPoolStateOK(t *testing.T) {
 	prop := models.Health
+	shellCommandFunc = func(_ string, _ ...string) commandExecutor {
+		return &MockCommandExecutor{}
+	}
 	result, err := getPoolState(prop)
-	assert.NoError(t, err, "Expected no error when 'OK' is returned")
-	assert.True(t, result, "Expected pool state to be true when 'OK' is returned")
-	// FAILED
-	shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-		return &MockCommandExecutor{output: "FAILED \n"}
+	assert.NoError(t, err, "Expected no error on clean exit")
+	assert.True(t, result, "Expected pool state to be true on clean exit")
+}
+
+// Tests for known sanoid exit conditions indicating pool problems
+func TestGetPoolStatePoolProblem(t *testing.T) {
+	prop := models.Health
+	// Exit codes 1-4 - Warning, Critical, Error
+	for exitcode := 1; exitcode <= 4; exitcode++ {
+		sanoidErr := makeExitError(exitcode)
+		assert.NotNil(t, sanoidErr, "Failed to create exit error for code %d", exitcode)
+		shellCommandFunc = func(_ string, _ ...string) commandExecutor {
+			return &MockCommandExecutor{err: sanoidErr}
+		}
+		result, err := getPoolState(prop)
+		assert.NoError(t, err, "Expected no error on exit codes 1-4")
+		assert.False(t, result, "Expected pool state to be false on exit codes 1-4")
 	}
-	result, err = getPoolState(prop)
-	assert.NoError(t, err, "Expected no error when 'FAILED' is returned")
-	assert.False(t, result, "Expected pool state to be false when 'FAILED' is returned")
-	// ERROR
-	shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-		return &MockCommandExecutor{error: fmt.Errorf("error")}
+}
+
+// Tests for unexpected sanoid exit
+func TestGetPoolStateSanoidProblem(t *testing.T) {
+	prop := models.Health
+	for _, testerr := range []error{makeExitError(255), makeExitError(5), exec.ErrNotFound} {
+		shellCommandFunc = func(_ string, _ ...string) commandExecutor {
+			return &MockCommandExecutor{err: testerr}
+		}
+		result, err := getPoolState(prop)
+		assert.Equal(t, testerr, err, "Expected error to be escalated")
+		assert.False(t, result, "Expected pool state to be false on sanoid problem")
 	}
-	_, err = getPoolState(prop)
-	assert.Error(t, err, "Expected an error when 'error' is returned")
 }
