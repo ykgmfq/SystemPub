@@ -62,9 +62,10 @@ func getPoolState(p models.Property) (bool, error) {
 // Gathers autodiscovery struct for the binary health, capacity and snapshot sensors
 func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Property]models.MqttConfig {
 	configs := make(map[models.Property]models.MqttConfig, len(models.PropStr))
+	unique_id_pre := mqttclient.NormalizeStr(device.Name) + "_pool_"
 	//iterate over all properties
 	for prop, propStr := range models.PropStr {
-		unique_id := device.Name + "_pool_" + propStr
+		unique_id := unique_id_pre + propStr
 		topic := "homeassistant/binary_sensor/" + unique_id + "/state"
 		configs[prop] = models.MqttConfig{Name: "Pool " + propStr, StateTopic: topic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 	}

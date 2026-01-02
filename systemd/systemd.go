@@ -19,7 +19,7 @@ var Logger zerolog.Logger
 
 // Returns a MqttConfig for the systemd units binary sensor.
 func getUnitConfig(device models.Device, interval time.Duration) models.MqttConfig {
-	unique_id := device.Name + "_units"
+	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
 	return models.MqttConfig{Name: "Systemd units", StateTopic: "homeassistant/binary_sensor/" + unique_id + "/state", DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
