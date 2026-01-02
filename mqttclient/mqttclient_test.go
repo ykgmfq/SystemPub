@@ -49,3 +49,27 @@ func TestGetTlsConfig(t *testing.T) {
 	assert.NotNil(t, cfg)
 	assert.NotNil(t, cfg.RootCAs)
 }
+func TestNormalizeStr(t *testing.T) {
+	strPairs := []struct {
+		in, want string
+	}{
+		{"SimpleName", "simplename"},
+		{"Mixed_CASE-Name", "mixed_case-name"},
+		{"Name with spaces", "name-with-spaces"},
+		{"Special!@#Chars", "special---chars"},
+		{"Domain.Name", "domain-name"},
+		{"Ünicode", "-nicode"},
+		{"123Numbers", "123numbers"},
+		{"mixed spaces &/slashes", "mixed-spaces---slashes"},
+		{"", ""},
+		{"___underscores___", "___underscores___"},
+		{"CAPS_AND spaces!", "caps_and-spaces-"},
+	}
+	for _, strPair := range strPairs {
+		test := func(t *testing.T) {
+			got := NormalizeStr(strPair.in)
+			assert.Equal(t, strPair.want, got)
+		}
+		t.Run(strPair.in, test)
+	}
+}
