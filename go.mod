@@ -3,7 +3,7 @@ module github.com/ykgmfq/SystemPub
 go 1.24.0
 
 require (
-	github.com/coreos/go-systemd/v22 v22.6.0
+	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
