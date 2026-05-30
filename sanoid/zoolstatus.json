@@ -1,0 +1,110 @@
+{
+    "output_version": {
+        "command": "zpool status",
+        "vers_major": 0,
+        "vers_minor": 1
+    },
+    "pools": {
+        "data": {
+            "name": "data",
+            "state": "ONLINE",
+            "pool_guid": 16291491892042445671,
+            "txg": 25309357,
+            "spa_version": 5000,
+            "zpl_version": 5,
+            "scan_stats": {
+                "function": "SCRUB",
+                "state": "FINISHED",
+                "start_time": 1767228484,
+                "end_time": 1767231347,
+                "to_examine": 789710036992,
+                "examined": 789711450112,
+                "skipped": 32157696,
+                "processed": 0,
+                "errors": 0,
+                "bytes_per_scan": 0,
+                "pass_start": 1767270913,
+                "scrub_pause": 0,
+                "scrub_spent_paused": 0,
+                "issued_bytes_per_scan": 0,
+                "issued": 789679292416
+            },
+            "removal_stats": {
+                "name": "indirect",
+                "state": "FINISHED",
+                "removing_vdev": 1,
+                "start_time": 1703240997,
+                "end_time": 1703240997,
+                "to_copy": 155648,
+                "copied": 155648,
+                "mapping_memory": 96
+            },
+            "vdevs": {
+                "data": {
+                    "name": "data",
+                    "vdev_type": "root",
+                    "guid": 16291491892042445671,
+                    "class": "normal",
+                    "state": "ONLINE",
+                    "alloc_space": 789805621248,
+                    "total_space": 1992864825344,
+                    "def_space": 1992864825344,
+                    "read_errors": 0,
+                    "write_errors": 0,
+                    "checksum_errors": 0,
+                    "vdevs": {
+                        "mirror-0": {
+                            "name": "mirror-0",
+                            "vdev_type": "mirror",
+                            "guid": 18046082025533406740,
+                            "class": "normal",
+                            "state": "ONLINE",
+                            "alloc_space": 789805621248,
+                            "total_space": 1992864825344,
+                            "def_space": 1992864825344,
+                            "rep_dev_size": 1992864825344,
+                            "read_errors": 0,
+                            "write_errors": 0,
+                            "checksum_errors": 0,
+                            "vdevs": {
+                                "sda": {
+                                    "name": "sda",
+                                    "vdev_type": "disk",
+                                    "guid": 7228608826215859593,
+                                    "path": "/dev/sda1",
+                                    "phys_path": "pci-0000:00:17.0-ata-1.0",
+                                    "devid": "ata-3500a0751e6e399de-part1",
+                                    "class": "normal",
+                                    "state": "ONLINE",
+                                    "rep_dev_size": 1992869543936,
+                                    "phys_space": 2000389406720,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0
+                                },
+                                "sdb": {
+                                    "name": "sdb",
+                                    "vdev_type": "disk",
+                                    "guid": 17149452728745754945,
+                                    "path": "/dev/sdb1",
+                                    "phys_path": "pci-0000:00:17.0-ata-2.0",
+                                    "devid": "ata-3500a0751e59e2dda-part1",
+                                    "class": "normal",
+                                    "state": "ONLINE",
+                                    "rep_dev_size": 1992869543936,
+                                    "phys_space": 2000389406720,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "error_count": 0
+        }
+    }
+}

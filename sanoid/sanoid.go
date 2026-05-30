@@ -15,16 +15,6 @@ import (
 
 var Logger zerolog.Logger
 
-// Interface for injecting mock output in tests
-type commandExecutor interface {
-	Run() error
-}
-
-// Gets overwritten in tests
-var shellCommandFunc = func(name string, arg ...string) commandExecutor {
-	return exec.Command(name, arg...)
-}
-
 // Maps Sanoid exit codes to human-readable states
 func sanoidState(exit int) string {
 	if exit > 4 || exit < 0 {
@@ -39,24 +29,23 @@ func sanoidState(exit int) string {
 	return sanoidExitLevels[exit]
 }
 
-// Runs Sanoid to check one of pool health, capacity and snapshots, and returns true if the output is "OK"
-func getPoolState(p models.Property) (bool, error) {
-	cmd := shellCommandFunc("sanoid", "--monitor-"+models.PropStr[p])
+// Runs Sanoid to check one of pool health, capacity and snapshots.
+// Returns (ok, state, err): state is non-empty when exit code 1-4 (pool problem, sanoid healthy).
+func getPoolState(run func(string, ...string) commandExecutor, p models.Property) (bool, string, error) {
+	cmd := run("sanoid", "--monitor-"+models.PropStr[p])
 	err := cmd.Run()
 	if err == nil {
-		return true, nil
+		return true, "", nil
 	}
 	var exitError *exec.ExitError
 	if !errors.As(err, &exitError) {
-		return false, err
+		return false, "", err
 	}
 	exitCode := exitError.ExitCode()
 	if exitCode > 4 {
-		return false, err
+		return false, "", err
 	}
-	Logger.Warn().Str("mod", "sanoid").Str("state", sanoidState(exitCode)).Msg("")
-	return false, nil
-
+	return false, sanoidState(exitCode), nil
 }
 
 // Gathers autodiscovery struct for the binary health, capacity and snapshot sensors
@@ -72,41 +61,48 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 	return configs
 }
 
-// Checks the state of pools using Sanoid commands and publishes the results to MQTT.
-type SanoidClient struct {
-	Discover chan bool
-	Interval time.Duration
-	Config   map[models.Property]models.MqttConfig
-	Pubs     chan *paho.Publish
-}
-
 // Returns a new Sanoid client.
 func NewSanoidClient(pubs chan *paho.Publish, device models.Device, interval time.Duration) SanoidClient {
 	return SanoidClient{
-		Pubs:     pubs,
-		Interval: interval,
-		Config:   GetPoolConfigs(device, interval),
-		Discover: make(chan bool),
+		Pubs:      pubs,
+		Interval:  interval,
+		Config:    GetPoolConfigs(device, interval),
+		Discover:  make(chan bool),
+		zpoolExec: func(name string, arg ...string) zpoolExecutor { return exec.Command(name, arg...) },
+		shellExec: func(name string, arg ...string) commandExecutor { return exec.Command(name, arg...) },
 	}
 }
 
 // Updates the state of all pools by running Sanoid commands and publishing the results to MQTT.
 func (client SanoidClient) update() error {
 	for property, config := range client.Config {
-		state, err := getPoolState(property)
+		ok, state, err := getPoolState(client.shellExec, property)
 		if err != nil {
 			return err
 		}
+		if !ok && state != "" {
+			Logger.Warn().Str("mod", "sanoid").Str("state", state).Msg("")
+		}
 		update := paho.Publish{
 			Topic:   config.StateTopic,
-			Payload: mqttclient.ProblemPayload(state),
+			Payload: mqttclient.ProblemPayload(ok),
 		}
 		client.Pubs <- &update
 	}
 	return nil
 }
 
-// Long-running routine that handles the Sanoid client and publishes messages.
+// logErrors logs non-nil errors from sanoid and zpool updates.
+func logErrors(sanoidErr, zpoolErr error) {
+	if sanoidErr != nil {
+		Logger.Error().Str("mod", "sanoid").Err(sanoidErr).Msg("")
+	}
+	if zpoolErr != nil {
+		Logger.Error().Str("mod", "zpool").Err(zpoolErr).Msg("")
+	}
+}
+
+// Long-running routine that handles the Sanoid and ZFS pool checks and publishes messages.
 func (client SanoidClient) Serve(ctx context.Context) {
 	updateTimer := time.NewTicker(client.Interval)
 	for {
@@ -118,19 +114,25 @@ func (client SanoidClient) Serve(ctx context.Context) {
 				continue
 			}
 			for _, c := range client.Config {
-				discovery := mqttclient.GetDiscovery(c)
-				client.Pubs <- discovery
+				msg, err := mqttclient.GetDiscovery(c)
+				if err != nil {
+					Logger.Error().Str("mod", "sanoid").Err(err).Msg("")
+					continue
+				}
+				client.Pubs <- msg
 			}
 			Logger.Debug().Str("mod", "sanoid").Msg("Discovery")
-			if err := client.update(); err != nil {
-				Logger.Error().Str("mod", "sanoid").Err(err).Msg("")
-			} else {
+			sErr := client.update()
+			zErr := client.updateZpool(true)
+			logErrors(sErr, zErr)
+			if sErr == nil && zErr == nil {
 				Logger.Debug().Str("mod", "sanoid").Msg("Updated sensors")
 			}
 		case <-updateTimer.C:
-			if err := client.update(); err != nil {
-				Logger.Error().Str("mod", "sanoid").Err(err).Msg("")
-			} else {
+			sErr := client.update()
+			zErr := client.updateZpool(false)
+			logErrors(sErr, zErr)
+			if sErr == nil && zErr == nil {
 				Logger.Debug().Str("mod", "sanoid").Msg("Updated sensors")
 			}
 		}
