@@ -20,7 +20,9 @@ var Logger zerolog.Logger
 // Returns a MqttConfig for the systemd units binary sensor.
 func getUnitConfig(device models.Device, interval time.Duration) models.MqttConfig {
 	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
-	return models.MqttConfig{Name: "Systemd units", StateTopic: "homeassistant/binary_sensor/" + unique_id + "/state", DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
+	stateTopic := "homeassistant/binary_sensor/" + unique_id + "/state"
+	attrTopic := "homeassistant/binary_sensor/" + unique_id + "/attributes"
+	return models.MqttConfig{Name: "Systemd units", StateTopic: stateTopic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
 // Returns the client device properties.
@@ -55,19 +57,18 @@ func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, err
 	if err != nil {
 		return false, err
 	}
-	ok := true
-	if len(states) > 0 {
-		ok = false
-		for _, state := range states {
-			Logger.Warn().Str("mod", "systemd").Str("failed unit", state.Name).Msg("")
-		}
+	failedUnits := make([]string, 0, len(states))
+	for _, state := range states {
+		Logger.Warn().Str("mod", "systemd").Str("failed unit", state.Name).Msg("")
+		failedUnits = append(failedUnits, state.Name)
 	}
-	update := paho.Publish{
-		Payload: mqttclient.ProblemPayload(ok),
-		Topic:   client.Config.StateTopic,
-		Retain:  true,
+	ok := len(failedUnits) == 0
+	attrs, err := json.Marshal(map[string][]string{"failed_units": failedUnits})
+	if err != nil {
+		return false, err
 	}
-	client.Pubs <- &update
+	client.Pubs <- &paho.Publish{Payload: mqttclient.ProblemPayload(ok), Topic: client.Config.StateTopic, Retain: true}
+	client.Pubs <- &paho.Publish{Payload: attrs, Topic: client.Config.JsonAttributesTopic, Retain: true}
 	Logger.Debug().Str("mod", "systemd").Msg("Updated sensors")
 	return ok, nil
 }
