@@ -24,8 +24,10 @@ func getUnitConfig(device models.Device, interval time.Duration) models.MqttConf
 }
 
 // Returns the client device properties.
-func GetDevice() (models.Device, error) {
-	out, err := exec.Command("hostnamectl", "--json=short").Output()
+func GetDevice(ctx context.Context) (models.Device, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "hostnamectl", "--json=short").Output()
 	if err != nil {
 		return models.Device{}, err
 	}

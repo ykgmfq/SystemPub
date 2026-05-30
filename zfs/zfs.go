@@ -56,9 +56,9 @@ func (s ZfsServer) publishState(e models.Entry) {
 	}
 }
 
-func (s ZfsServer) discoverAll() {
+func (s ZfsServer) discoverAll(ctx context.Context) {
 	for _, p := range s.providers {
-		entries, err := p.Entries()
+		entries, err := p.Entries(ctx)
 		if err != nil {
 			Logger.Error().Str("mod", "zfs").Err(err).Msg("")
 			continue
@@ -71,9 +71,9 @@ func (s ZfsServer) discoverAll() {
 	}
 }
 
-func (s ZfsServer) updateAll() {
+func (s ZfsServer) updateAll(ctx context.Context) {
 	for _, p := range s.providers {
-		entries, err := p.Entries()
+		entries, err := p.Entries(ctx)
 		if err != nil {
 			Logger.Error().Str("mod", "zfs").Err(err).Msg("")
 			continue
@@ -95,10 +95,10 @@ func (s ZfsServer) Serve(ctx context.Context) {
 				continue
 			}
 			Logger.Debug().Str("mod", "zfs").Msg("Discovery")
-			s.discoverAll()
-			s.updateAll()
+			s.discoverAll(ctx)
+			s.updateAll(ctx)
 		case <-ticker.C:
-			s.updateAll()
+			s.updateAll(ctx)
 		}
 	}
 }

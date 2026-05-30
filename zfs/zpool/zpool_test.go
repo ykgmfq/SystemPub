@@ -1,6 +1,7 @@
 package zpool
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -17,15 +18,15 @@ type mockZpoolCmd struct {
 
 func (m *mockZpoolCmd) Output() ([]byte, error) { return m.data, m.err }
 
-func zpoolFixtureExec(t *testing.T, path string) func(string, ...string) zpoolExecutor {
+func zpoolFixtureExec(t *testing.T, path string) func(context.Context, string, ...string) zpoolExecutor {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	return func(_ string, _ ...string) zpoolExecutor { return &mockZpoolCmd{data: data} }
+	return func(_ context.Context, _ string, _ ...string) zpoolExecutor { return &mockZpoolCmd{data: data} }
 }
 
 func TestRunZpoolParsing(t *testing.T) {
-	status, err := runZpool(zpoolFixtureExec(t, "zoolstatus.json"))
+	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus.json"))
 	require.NoError(t, err)
 	pool := status.Pools["data"]
 	require.NotNil(t, pool)
@@ -36,7 +37,7 @@ func TestRunZpoolParsing(t *testing.T) {
 }
 
 func TestRunZpoolMultiPool(t *testing.T) {
-	status, err := runZpool(zpoolFixtureExec(t, "zoolstatus2.json"))
+	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus2.json"))
 	require.NoError(t, err)
 	assert.Len(t, status.Pools, 2)
 	assert.Equal(t, "DEGRADED", status.Pools["test2"].State)
@@ -63,7 +64,7 @@ func TestCollectLeafVdevs(t *testing.T) {
 }
 
 func TestBuildPoolEntriesHealthy(t *testing.T) {
-	status, err := runZpool(zpoolFixtureExec(t, "zoolstatus.json"))
+	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus.json"))
 	require.NoError(t, err)
 	pool := status.Pools["data"]
 	entries := buildPoolEntries(pool, 20*time.Minute)
@@ -116,7 +117,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 }
 
 func TestBuildPoolEntriesDegraded(t *testing.T) {
-	status, err := runZpool(zpoolFixtureExec(t, "zoolstatus2.json"))
+	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus2.json"))
 	require.NoError(t, err)
 	pool := status.Pools["test2"]
 	entries := buildPoolEntries(pool, 20*time.Minute)
@@ -129,7 +130,7 @@ func TestBuildPoolEntriesDegraded(t *testing.T) {
 }
 
 func TestNoScrubTimesWhenZero(t *testing.T) {
-	status, err := runZpool(zpoolFixtureExec(t, "zoolstatus2.json"))
+	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus2.json"))
 	require.NoError(t, err)
 	pool := status.Pools["test"] // no scan_stats
 	entries := buildPoolEntries(pool, 20*time.Minute)
@@ -154,9 +155,9 @@ func TestZpoolDeviceIdentifierIsPureGUID(t *testing.T) {
 
 func TestRunZpoolError(t *testing.T) {
 	provider := NewZpoolProvider(20 * time.Minute)
-	provider.execFn = func(_ string, _ ...string) zpoolExecutor {
+	provider.execFn = func(_ context.Context, _ string, _ ...string) zpoolExecutor {
 		return &mockZpoolCmd{err: os.ErrNotExist}
 	}
-	_, err := provider.Entries()
+	_, err := provider.Entries(context.Background())
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }

@@ -144,7 +144,10 @@ func main() {
 	zerolog.SetGlobalLevel(config.Loglevel)
 	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
 
-	dev, err := systemd.GetDevice()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	dev, err := systemd.GetDevice(ctx)
 	if err != nil {
 		logger.Fatal().Str("mod", "main").Err(err).Msg("Could not get device info")
 	}
@@ -153,10 +156,6 @@ func main() {
 	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute)
 	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute)
 	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, zfsServer.Discover, wdconn)
-
-	// Set connection context
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	go mqttClient.Serve(ctx)
 	go systemdClient.Serve(ctx)

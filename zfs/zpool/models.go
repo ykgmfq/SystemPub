@@ -1,6 +1,7 @@
 package zpool
 
 import (
+	"context"
 	"time"
 
 	"github.com/ykgmfq/SystemPub/models"
@@ -59,5 +60,5 @@ type zpoolSensorEntry struct {
 // ZpoolProvider runs `zpool status` and publishes per-pool and per-disk MQTT sensors.
 type ZpoolProvider struct {
 	interval time.Duration
-	execFn   func(string, ...string) zpoolExecutor
+	execFn   func(context.Context, string, ...string) zpoolExecutor
 }
