@@ -1,0 +1,174 @@
+{
+    "output_version": {
+        "command": "zpool status",
+        "vers_major": 0,
+        "vers_minor": 1
+    },
+    "pools": {
+        "test": {
+            "name": "test",
+            "state": "ONLINE",
+            "pool_guid": 13597808324366013145,
+            "txg": 220,
+            "spa_version": 5000,
+            "zpl_version": 5,
+            "status": "Some supported and requested features are not enabled on the pool.\n\tThe pool can still be used, but some features are unavailable.\n",
+            "action": "Enable all features using 'zpool upgrade'. Once this is done,\n\tthe pool may no longer be accessible by software that does not support\n\tthe features. See zpool-features(7) for details.\n",
+            "vdevs": {
+                "test": {
+                    "name": "test",
+                    "vdev_type": "root",
+                    "guid": 13597808324366013145,
+                    "class": "normal",
+                    "state": "ONLINE",
+                    "alloc_space": 198144,
+                    "total_space": 2013265920,
+                    "def_space": 2013265920,
+                    "read_errors": 0,
+                    "write_errors": 0,
+                    "checksum_errors": 0,
+                    "vdevs": {
+                        "mirror-0": {
+                            "name": "mirror-0",
+                            "vdev_type": "mirror",
+                            "guid": 8913971510149400819,
+                            "class": "normal",
+                            "state": "ONLINE",
+                            "alloc_space": 198144,
+                            "total_space": 2013265920,
+                            "def_space": 2013265920,
+                            "rep_dev_size": 2013265920,
+                            "read_errors": 0,
+                            "write_errors": 0,
+                            "checksum_errors": 0,
+                            "vdevs": {
+                                "/var/tmp/1.img": {
+                                    "name": "/var/tmp/1.img",
+                                    "vdev_type": "file",
+                                    "guid": 15502809693612937459,
+                                    "path": "/var/tmp/1.img",
+                                    "class": "normal",
+                                    "state": "ONLINE",
+                                    "rep_dev_size": 2017984512,
+                                    "phys_space": 2147483648,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0
+                                },
+                                "/var/tmp/2.img": {
+                                    "name": "/var/tmp/2.img",
+                                    "vdev_type": "file",
+                                    "guid": 3722990331638805563,
+                                    "path": "/var/tmp/2.img",
+                                    "class": "normal",
+                                    "state": "ONLINE",
+                                    "rep_dev_size": 2017984512,
+                                    "phys_space": 2147483648,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "error_count": 0
+        },
+        "test2": {
+            "name": "test2",
+            "state": "DEGRADED",
+            "pool_guid": 16735969013973985662,
+            "txg": 1085,
+            "spa_version": 5000,
+            "zpl_version": 5,
+            "status": "One or more devices could not be used because the label is missing or\n\tinvalid.  Sufficient replicas exist for the pool to continue\n\tfunctioning in a degraded state.\n",
+            "action": "Replace the device using 'zpool replace'.\n",
+            "msgid": "ZFS-8000-4J",
+            "moreinfo": "https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-4J",
+            "scan_stats": {
+                "function": "SCRUB",
+                "state": "FINISHED",
+                "start_time": 1728226574,
+                "end_time": 1728226574,
+                "to_examine": 181248,
+                "examined": 181248,
+                "skipped": 56832,
+                "processed": 0,
+                "errors": 0,
+                "bytes_per_scan": 0,
+                "pass_start": 1766148417,
+                "scrub_pause": 0,
+                "scrub_spent_paused": 0,
+                "issued_bytes_per_scan": 0,
+                "issued": 124416
+            },
+            "vdevs": {
+                "test2": {
+                    "name": "test2",
+                    "vdev_type": "root",
+                    "guid": 16735969013973985662,
+                    "class": "normal",
+                    "state": "DEGRADED",
+                    "alloc_space": 215040,
+                    "total_space": 2013265920,
+                    "def_space": 2013265920,
+                    "read_errors": 0,
+                    "write_errors": 0,
+                    "checksum_errors": 0,
+                    "vdevs": {
+                        "mirror-0": {
+                            "name": "mirror-0",
+                            "vdev_type": "mirror",
+                            "guid": 10444786907836543002,
+                            "class": "normal",
+                            "state": "DEGRADED",
+                            "alloc_space": 215040,
+                            "total_space": 2013265920,
+                            "def_space": 2013265920,
+                            "rep_dev_size": 2013265920,
+                            "read_errors": 0,
+                            "write_errors": 0,
+                            "checksum_errors": 0,
+                            "vdevs": {
+                                "9759834061250741895": {
+                                    "name": "9759834061250741895",
+                                    "vdev_type": "file",
+                                    "guid": 9759834061250741895,
+                                    "path": "/var/tmp/3.img",
+                                    "class": "normal",
+                                    "state": "CANT_OPEN",
+                                    "rep_dev_size": 2017984512,
+                                    "phys_space": 2147483648,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0,
+                                    "not_present": 1,
+                                    "was": "/var/tmp/3.img"
+                                },
+                                "/var/tmp/4.img": {
+                                    "name": "/var/tmp/4.img",
+                                    "vdev_type": "file",
+                                    "guid": 600434349613807847,
+                                    "path": "/var/tmp/4.img",
+                                    "class": "normal",
+                                    "state": "ONLINE",
+                                    "rep_dev_size": 2017984512,
+                                    "phys_space": 2147483648,
+                                    "read_errors": 0,
+                                    "write_errors": 0,
+                                    "checksum_errors": 0,
+                                    "slow_ios": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "error_count": 0
+        }
+    }
+}

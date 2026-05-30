@@ -32,26 +32,19 @@ func (m *MockCommandExecutor) Run() error {
 
 // Tests for clean sanoid exit indicating healthy pool
 func TestGetPoolStateOK(t *testing.T) {
-	prop := models.Health
-	shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-		return &MockCommandExecutor{}
-	}
-	result, err := getPoolState(prop)
+	mockRun := func(_ string, _ ...string) commandExecutor { return &MockCommandExecutor{} }
+	result, _, err := getPoolState(mockRun, models.Health)
 	assert.NoError(t, err, "Expected no error on clean exit")
 	assert.True(t, result, "Expected pool state to be true on clean exit")
 }
 
 // Tests for known sanoid exit conditions indicating pool problems
 func TestGetPoolStatePoolProblem(t *testing.T) {
-	prop := models.Health
-	// Exit codes 1-4 - Warning, Critical, Error
 	for exitcode := 1; exitcode <= 4; exitcode++ {
 		sanoidErr := makeExitError(exitcode)
 		assert.NotNil(t, sanoidErr, "Failed to create exit error for code %d", exitcode)
-		shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-			return &MockCommandExecutor{err: sanoidErr}
-		}
-		result, err := getPoolState(prop)
+		mockRun := func(_ string, _ ...string) commandExecutor { return &MockCommandExecutor{err: sanoidErr} }
+		result, _, err := getPoolState(mockRun, models.Health)
 		assert.NoError(t, err, "Expected no error on exit codes 1-4")
 		assert.False(t, result, "Expected pool state to be false on exit codes 1-4")
 	}
@@ -59,12 +52,9 @@ func TestGetPoolStatePoolProblem(t *testing.T) {
 
 // Tests for unexpected sanoid exit
 func TestGetPoolStateSanoidProblem(t *testing.T) {
-	prop := models.Health
 	for _, testerr := range []error{makeExitError(255), makeExitError(5), exec.ErrNotFound} {
-		shellCommandFunc = func(_ string, _ ...string) commandExecutor {
-			return &MockCommandExecutor{err: testerr}
-		}
-		result, err := getPoolState(prop)
+		mockRun := func(_ string, _ ...string) commandExecutor { return &MockCommandExecutor{err: testerr} }
+		result, _, err := getPoolState(mockRun, models.Health)
 		assert.Equal(t, testerr, err, "Expected error to be escalated")
 		assert.False(t, result, "Expected pool state to be false on sanoid problem")
 	}
