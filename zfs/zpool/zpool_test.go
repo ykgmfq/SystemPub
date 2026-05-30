@@ -1,4 +1,4 @@
-package sanoid
+package zpool
 
 import (
 	"encoding/json"
@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ykgmfq/SystemPub/models"
 )
 
 type mockZpoolCmd struct {
@@ -155,11 +153,10 @@ func TestZpoolDeviceIdentifierIsPureGUID(t *testing.T) {
 }
 
 func TestRunZpoolError(t *testing.T) {
-	pubs := make(chan *paho.Publish, 64)
-	client := NewSanoidClient(pubs, models.Device{}, 20*time.Minute)
-	client.zpoolExec = func(_ string, _ ...string) zpoolExecutor {
+	provider := NewZpoolProvider(20 * time.Minute)
+	provider.execFn = func(_ string, _ ...string) zpoolExecutor {
 		return &mockZpoolCmd{err: os.ErrNotExist}
 	}
-	err := client.updateZpool(false)
+	_, err := provider.Entries()
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
