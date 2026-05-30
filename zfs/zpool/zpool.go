@@ -2,6 +2,7 @@
 package zpool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -14,8 +15,10 @@ import (
 
 const gib = float64(1 << 30)
 
-func runZpool(exec func(string, ...string) zpoolExecutor) (*zpoolStatus, error) {
-	out, err := exec("zpool", "status", "-j", "--json-int").Output()
+func runZpool(ctx context.Context, exec func(context.Context, string, ...string) zpoolExecutor) (*zpoolStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, err := exec(ctx, "zpool", "status", "-j", "--json-int").Output()
 	if err != nil {
 		return nil, err
 	}
@@ -205,13 +208,13 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 func NewZpoolProvider(interval time.Duration) *ZpoolProvider {
 	return &ZpoolProvider{
 		interval: interval,
-		execFn:   func(name string, arg ...string) zpoolExecutor { return exec.Command(name, arg...) },
+		execFn:   func(ctx context.Context, name string, arg ...string) zpoolExecutor { return exec.CommandContext(ctx, name, arg...) },
 	}
 }
 
 // Entries runs zpool status and returns sensor entries for all pools and disks.
-func (p *ZpoolProvider) Entries() ([]models.Entry, error) {
-	status, err := runZpool(p.execFn)
+func (p *ZpoolProvider) Entries(ctx context.Context) ([]models.Entry, error) {
+	status, err := runZpool(ctx, p.execFn)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@
 package sanoid
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"time"
@@ -29,8 +30,10 @@ func sanoidState(exit int) string {
 
 // Runs Sanoid to check one of pool health, capacity and snapshots.
 // Returns (ok, state, err): state is non-empty when exit code 1-4 (pool problem, sanoid healthy).
-func getPoolState(run func(string, ...string) commandExecutor, p models.Property) (bool, string, error) {
-	cmd := run("sanoid", "--monitor-"+models.PropStr[p])
+func getPoolState(ctx context.Context, run func(context.Context, string, ...string) commandExecutor, p models.Property) (bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	cmd := run(ctx, "sanoid", "--monitor-"+models.PropStr[p])
 	err := cmd.Run()
 	if err == nil {
 		return true, "", nil
@@ -40,7 +43,7 @@ func getPoolState(run func(string, ...string) commandExecutor, p models.Property
 		return false, "", err
 	}
 	exitCode := exitError.ExitCode()
-	if exitCode > 4 {
+	if exitCode < 0 || exitCode > 4 {
 		return false, "", err
 	}
 	return false, sanoidState(exitCode), nil
@@ -62,15 +65,15 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 func NewSanoidProvider(device models.Device, interval time.Duration) *SanoidProvider {
 	return &SanoidProvider{
 		configs:   GetPoolConfigs(device, interval),
-		shellExec: func(name string, arg ...string) commandExecutor { return exec.Command(name, arg...) },
+		shellExec: func(ctx context.Context, name string, arg ...string) commandExecutor { return exec.CommandContext(ctx, name, arg...) },
 	}
 }
 
 // Entries runs sanoid for each monitored property and returns the current sensor states.
-func (p *SanoidProvider) Entries() ([]models.Entry, error) {
+func (p *SanoidProvider) Entries(ctx context.Context) ([]models.Entry, error) {
 	entries := make([]models.Entry, 0, len(p.configs))
 	for property, config := range p.configs {
-		ok, state, err := getPoolState(p.shellExec, property)
+		ok, state, err := getPoolState(ctx, p.shellExec, property)
 		if err != nil {
 			return nil, err
 		}
