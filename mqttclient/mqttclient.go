@@ -54,6 +54,7 @@ func GetDiscovery(config models.MqttConfig) (*paho.Publish, error) {
 	}
 	return &paho.Publish{
 		QoS:     1,
+		Retain:  true,
 		Topic:   "homeassistant/binary_sensor/" + config.UniqueID + "/config",
 		Payload: payload,
 	}, nil
@@ -67,6 +68,7 @@ func GetSensorDiscovery(config models.MqttConfig) (*paho.Publish, error) {
 	}
 	return &paho.Publish{
 		QoS:     1,
+		Retain:  true,
 		Topic:   "homeassistant/sensor/" + config.UniqueID + "/config",
 		Payload: payload,
 	}, nil

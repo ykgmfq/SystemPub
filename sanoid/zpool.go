@@ -210,13 +210,13 @@ func publishZpoolDiscovery(pubs chan *paho.Publish, entry zpoolSensorEntry) erro
 }
 
 func publishZpoolState(pubs chan *paho.Publish, entry zpoolSensorEntry) error {
-	pubs <- &paho.Publish{Topic: entry.config.StateTopic, Payload: entry.payload()}
+	pubs <- &paho.Publish{Topic: entry.config.StateTopic, Payload: entry.payload(), Retain: true}
 	if entry.attrs != nil {
 		b, err := entry.attrs()
 		if err != nil {
 			return err
 		}
-		pubs <- &paho.Publish{Topic: entry.config.JsonAttributesTopic, Payload: b}
+		pubs <- &paho.Publish{Topic: entry.config.JsonAttributesTopic, Payload: b, Retain: true}
 	}
 	return nil
 }
