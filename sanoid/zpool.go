@@ -125,6 +125,14 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 			domain:  "sensor",
 			payload: func() []byte { return []byte(fmt.Sprintf("%.2f", totalVal)) },
 		})
+
+		freeVal := float64(rootVdev.TotalSpace-rootVdev.AllocSpace) / gib
+		freeUID := zpoolSensorUID(guid, "free")
+		entries = append(entries, zpoolSensorEntry{
+			config:  makeSensorConfig("Free space", freeUID, "sensor", "data_size", "measurement", "GiB", device, interval),
+			domain:  "sensor",
+			payload: func() []byte { return []byte(fmt.Sprintf("%.2f", freeVal)) },
+		})
 	}
 
 	// Error sensors
