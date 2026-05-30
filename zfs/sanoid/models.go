@@ -7,7 +7,7 @@ import (
 )
 
 type commandExecutor interface {
-	Run() error
+	Output() ([]byte, error)
 }
 
 // SanoidProvider checks pool health, capacity and snapshots via the sanoid CLI.
