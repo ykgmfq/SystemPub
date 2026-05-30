@@ -18,8 +18,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
-	"github.com/ykgmfq/SystemPub/sanoid"
 	"github.com/ykgmfq/SystemPub/systemd"
+	"github.com/ykgmfq/SystemPub/zfs"
 
 	"gopkg.in/yaml.v3"
 )
@@ -91,7 +91,7 @@ func watchdog(ctx context.Context, conn chan bool) {
 func main() {
 	// Logging
 	logger = zerolog.New(os.Stdout).With().Logger()
-	sanoid.Logger = logger
+	zfs.Logger = logger
 	systemd.Logger = logger
 	mqttclient.Logger = logger
 
@@ -151,8 +151,8 @@ func main() {
 	wdconn := make(chan bool)
 	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev)
 	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute)
-	sanoidClient := sanoid.NewSanoidClient(mqttClient.Pubs, dev, 20*time.Minute)
-	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, sanoidClient.Discover, wdconn)
+	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute)
+	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, zfsServer.Discover, wdconn)
 
 	// Set connection context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -160,7 +160,7 @@ func main() {
 
 	go mqttClient.Serve(ctx)
 	go systemdClient.Serve(ctx)
-	go sanoidClient.Serve(ctx)
+	go zfsServer.Serve(ctx)
 	go watchdog(ctx, wdconn)
 
 	<-ctx.Done()

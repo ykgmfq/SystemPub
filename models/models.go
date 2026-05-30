@@ -83,3 +83,11 @@ type SystemPubConfig struct {
 	MQTTServer MQTT          `yaml:"mqttserver"`
 	Loglevel   zerolog.Level `yaml:"loglevel"`
 }
+
+// Entry holds the MQTT config and current state for one sensor.
+type Entry struct {
+	Config     MqttConfig
+	Domain     string // "sensor" or "binary_sensor"
+	Payload    []byte
+	Attributes []byte // nil if no attributes
+}

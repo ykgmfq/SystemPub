@@ -1,12 +1,13 @@
-package sanoid
+// Package zpool provides a ZFS provider that reads pool status via `zpool status -j`.
+package zpool
 
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"time"
 
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
 )
@@ -200,52 +201,37 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 	return entries
 }
 
-func publishZpoolDiscovery(pubs chan *paho.Publish, entry zpoolSensorEntry) error {
-	var (
-		msg *paho.Publish
-		err error
-	)
-	if entry.domain == "sensor" {
-		msg, err = mqttclient.GetSensorDiscovery(entry.config)
-	} else {
-		msg, err = mqttclient.GetDiscovery(entry.config)
+// NewZpoolProvider returns a provider that reads pool status via `zpool status -j`.
+func NewZpoolProvider(interval time.Duration) *ZpoolProvider {
+	return &ZpoolProvider{
+		interval: interval,
+		execFn:   func(name string, arg ...string) zpoolExecutor { return exec.Command(name, arg...) },
 	}
-	if err != nil {
-		return err
-	}
-	pubs <- msg
-	return nil
 }
 
-func publishZpoolState(pubs chan *paho.Publish, entry zpoolSensorEntry) error {
-	pubs <- &paho.Publish{Topic: entry.config.StateTopic, Payload: entry.payload(), Retain: true}
-	if entry.attrs != nil {
-		b, err := entry.attrs()
-		if err != nil {
-			return err
-		}
-		pubs <- &paho.Publish{Topic: entry.config.JsonAttributesTopic, Payload: b, Retain: true}
-	}
-	return nil
-}
-
-// updateZpool runs zpool status, then publishes discovery (if requested) and state for all pools.
-func (client SanoidClient) updateZpool(withDiscovery bool) error {
-	status, err := runZpool(client.zpoolExec)
+// Entries runs zpool status and returns sensor entries for all pools and disks.
+func (p *ZpoolProvider) Entries() ([]models.Entry, error) {
+	status, err := runZpool(p.execFn)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var entries []models.Entry
 	for _, pool := range status.Pools {
-		for _, e := range buildPoolEntries(pool, client.Interval) {
-			if withDiscovery {
-				if err := publishZpoolDiscovery(client.Pubs, e); err != nil {
-					return err
+		for _, e := range buildPoolEntries(pool, p.interval) {
+			var attrs []byte
+			if e.attrs != nil {
+				attrs, err = e.attrs()
+				if err != nil {
+					return nil, err
 				}
 			}
-			if err := publishZpoolState(client.Pubs, e); err != nil {
-				return err
-			}
+			entries = append(entries, models.Entry{
+				Config:     e.config,
+				Domain:     e.domain,
+				Payload:    e.payload(),
+				Attributes: attrs,
+			})
 		}
 	}
-	return nil
+	return entries, nil
 }

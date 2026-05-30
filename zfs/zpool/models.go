@@ -1,15 +1,10 @@
-package sanoid
+package zpool
 
 import (
 	"time"
 
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/ykgmfq/SystemPub/models"
 )
-
-type commandExecutor interface {
-	Run() error
-}
 
 type zpoolExecutor interface {
 	Output() ([]byte, error)
@@ -61,12 +56,8 @@ type zpoolSensorEntry struct {
 	attrs   func() ([]byte, error) // nil if no attributes
 }
 
-// SanoidClient checks pool health, capacity and snapshots and publishes results to MQTT.
-type SanoidClient struct {
-	Discover  chan bool
-	Interval  time.Duration
-	Config    map[models.Property]models.MqttConfig
-	Pubs      chan *paho.Publish
-	zpoolExec func(string, ...string) zpoolExecutor
-	shellExec func(string, ...string) commandExecutor
+// ZpoolProvider runs `zpool status` and publishes per-pool and per-disk MQTT sensors.
+type ZpoolProvider struct {
+	interval time.Duration
+	execFn   func(string, ...string) zpoolExecutor
 }
