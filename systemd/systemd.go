@@ -24,28 +24,16 @@ func getUnitConfig(device models.Device, interval time.Duration) models.MqttConf
 }
 
 // Returns the client device properties.
-func GetDevice() models.Device {
+func GetDevice() (models.Device, error) {
 	out, err := exec.Command("hostnamectl", "--json=short").Output()
 	if err != nil {
-		Logger.Fatal().Str("mod", "systemd").Err(err).Msg("")
-		panic(err)
+		return models.Device{}, err
 	}
 	var status models.Hostnamectl
 	if err = json.Unmarshal(out, &status); err != nil {
-		Logger.Fatal().Str("mod", "systemd").Err(err).Msg("")
-		panic(err)
+		return models.Device{}, err
 	}
-	device := models.Device{Name: status.Hostname, SWversion: status.OperatingSystemPrettyName, Identifiers: [1]string{status.MachineID}, Manufacturer: status.HardwareVendor, Model: status.HardwareModel}
-	return device
-}
-
-// Client for systemd units monitoring via D-Bus.
-type DbusClient struct {
-	Conn     chan bool
-	Discover chan bool
-	Interval time.Duration
-	Config   models.MqttConfig
-	Pubs     chan *paho.Publish
+	return models.Device{Name: status.Hostname, SWversion: status.OperatingSystemPrettyName, Identifiers: [1]string{status.MachineID}, Manufacturer: status.HardwareVendor, Model: status.HardwareModel}, nil
 }
 
 // Returns a new DbusClient instance with initialized channels and configuration.
@@ -120,8 +108,12 @@ func (client DbusClient) Serve(ctx context.Context) {
 			if !ok {
 				continue
 			}
-			discovery := mqttclient.GetDiscovery(client.Config)
-			client.Pubs <- discovery
+			discovery, err := mqttclient.GetDiscovery(client.Config)
+			if err != nil {
+				Logger.Error().Str("mod", "systemd").Err(err).Msg("")
+			} else {
+				client.Pubs <- discovery
+			}
 			Logger.Debug().Str("mod", "systemd").Msg("Discovery")
 			up()
 		case <-updateTimer.C:

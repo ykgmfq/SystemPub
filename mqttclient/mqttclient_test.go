@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/ykgmfq/SystemPub/models"
 )
 
@@ -25,13 +26,14 @@ func TestGetDiscovery(t *testing.T) {
 		Name:     "Test Sensor",
 	}
 
-	discoveryMsg := GetDiscovery(config)
+	discoveryMsg, err := GetDiscovery(config)
+	require.NoError(t, err)
 
 	assert.Equal(t, "homeassistant/binary_sensor/test_sensor/config", discoveryMsg.Topic)
 	assert.Equal(t, byte(1), discoveryMsg.QoS)
 
 	var payload map[string]any
-	err := json.Unmarshal(discoveryMsg.Payload, &payload)
+	err = json.Unmarshal(discoveryMsg.Payload, &payload)
 	assert.NoError(t, err)
 	assert.Equal(t, "Test Sensor", payload["name"])
 }

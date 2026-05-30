@@ -144,7 +144,10 @@ func main() {
 	zerolog.SetGlobalLevel(config.Loglevel)
 	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
 
-	dev := systemd.GetDevice()
+	dev, err := systemd.GetDevice()
+	if err != nil {
+		logger.Fatal().Str("mod", "main").Err(err).Msg("Could not get device info")
+	}
 	wdconn := make(chan bool)
 	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev)
 	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute)

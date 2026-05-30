@@ -19,17 +19,6 @@ import (
 
 var Logger zerolog.Logger
 
-// MQTT client for Home Assistant sensors.
-// The device info is used for autodiscovery and associating the machine with its sensors.
-// It receives to-be-published messages from the main process and sends them to the MQTT server.
-// The main process can listen to the Conn channel to check if the connection is established.
-type Mqttclient struct {
-	Server        models.MQTT
-	Device        models.Device
-	Pubs          chan *paho.Publish
-	ConnListeners []chan bool
-}
-
 // Replace invalid characters and convert to lowercase for MQTT compatibility
 func NormalizeStr(input string) string {
 	input = strings.ToLower(input)
@@ -58,18 +47,29 @@ func getTlsConfig() (*tls.Config, error) {
 }
 
 // Returns a discovery message for a given sensor
-func GetDiscovery(config models.MqttConfig) *paho.Publish {
+func GetDiscovery(config models.MqttConfig) (*paho.Publish, error) {
 	payload, err := json.Marshal(config)
 	if err != nil {
-		Logger.Fatal().Str("mod", "mqtt").Err(err).Msg("Failed to marshal discovery message")
-		panic(err)
+		return nil, err
 	}
-	disovery := paho.Publish{
+	return &paho.Publish{
 		QoS:     1,
 		Topic:   "homeassistant/binary_sensor/" + config.UniqueID + "/config",
 		Payload: payload,
+	}, nil
+}
+
+// Returns a discovery message for a numeric sensor entity
+func GetSensorDiscovery(config models.MqttConfig) (*paho.Publish, error) {
+	payload, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
 	}
-	return &disovery
+	return &paho.Publish{
+		QoS:     1,
+		Topic:   "homeassistant/sensor/" + config.UniqueID + "/config",
+		Payload: payload,
+	}, nil
 }
 
 // Sensor payload for problem type. Note the inverted logic!
@@ -100,20 +100,8 @@ func (client Mqttclient) notifyListeners(connected bool) {
 	}
 }
 
-// Creates a new MQTT connection with the given configuration.
-func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
-	// TLS configuration
-	var tlsConfig *tls.Config
-	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
-		Logger.Info().Str("mod", "mqtt").Msg("Using secure connection")
-		if conf, err := getTlsConfig(); err != nil {
-			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to get TLS config")
-			return nil, err
-		} else {
-			tlsConfig = conf
-		}
-	}
-
+// buildClientConfig constructs the autopaho client configuration with all callbacks.
+func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.ClientConfig {
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
@@ -146,12 +134,11 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		Logger.Debug().Str("mod", "mqtt").Str("topic", p.Topic).Msg("Published message")
 	}
 
-	// Client configuration
 	user := client.Server.User
 	if client.Server.User == "" {
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
 	}
-	cliCfg := autopaho.ClientConfig{
+	return autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{client.Server.Host.URL},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
@@ -171,14 +158,24 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		ConnectUsername: user,
 		ConnectPassword: []byte(client.Server.Password),
 	}
-	Logger.Debug().Str("mod", "mqtt").Str("username", cliCfg.ConnectUsername).Str("clientID", cliCfg.ClientID).Msg("")
+}
 
-	Logger.Debug().Str("mod", "mqtt").Msg("Starting connection")
-	connManage, err := autopaho.NewConnection(ctx, cliCfg)
-	if err != nil {
-		return nil, err
+// Creates a new MQTT connection with the given configuration.
+func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
+	var tlsConfig *tls.Config
+	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
+		Logger.Info().Str("mod", "mqtt").Msg("Using secure connection")
+		conf, err := getTlsConfig()
+		if err != nil {
+			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to get TLS config")
+			return nil, err
+		}
+		tlsConfig = conf
 	}
-	return connManage, nil
+	cfg := client.buildClientConfig(tlsConfig)
+	Logger.Debug().Str("mod", "mqtt").Str("username", cfg.ConnectUsername).Str("clientID", cfg.ClientConfig.ClientID).Msg("")
+	Logger.Debug().Str("mod", "mqtt").Msg("Starting connection")
+	return autopaho.NewConnection(ctx, cfg)
 }
 
 // Long-running routine that handles the MQTT connection and publishes messages.
@@ -187,18 +184,17 @@ func (client Mqttclient) Serve(ctx context.Context) {
 	defer cancel()
 	connManage, err := client.createConnection(mqttctx)
 	if err != nil {
+		Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to create connection")
 		return
 	}
 	for {
 		select {
 		case <-mqttctx.Done():
-			// Cleanup and exit
-			fmt.Println("Routine stopped")
+			Logger.Info().Str("mod", "mqtt").Msg("Routine stopped")
 			return
 		case pub, ok := <-client.Pubs:
-			// Check if the channel is closed
 			if !ok {
-				fmt.Println("Work channel closed, exiting routine")
+				Logger.Info().Str("mod", "mqtt").Msg("Work channel closed, exiting routine")
 				return
 			}
 			if _, err := connManage.Publish(mqttctx, pub); err != nil {
