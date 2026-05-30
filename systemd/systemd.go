@@ -63,6 +63,7 @@ func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, err
 	update := paho.Publish{
 		Payload: mqttclient.ProblemPayload(ok),
 		Topic:   client.Config.StateTopic,
+		Retain:  true,
 	}
 	client.Pubs <- &update
 	Logger.Debug().Str("mod", "systemd").Msg("Updated sensors")

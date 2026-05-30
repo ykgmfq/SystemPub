@@ -86,6 +86,7 @@ func (client SanoidClient) update() error {
 		update := paho.Publish{
 			Topic:   config.StateTopic,
 			Payload: mqttclient.ProblemPayload(ok),
+			Retain:  true,
 		}
 		client.Pubs <- &update
 	}
