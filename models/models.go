@@ -33,14 +33,17 @@ type Device struct {
 
 // Sensor configuration for Home Assistant autodiscovery
 type MqttConfig struct {
-	Name          string `json:"name"`
-	DeviceClass   string `json:"device_class"`
-	StateTopic    string `json:"state_topic"`
-	UniqueID      string `json:"unique_id"`
-	ValueTemplate string `json:"value_template"`
-	Device        Device `json:"device"`
-	ExpireAfter   int    `json:"expire_after"`
-	ForceUpdate   bool   `json:"force_update"`
+	Name                string `json:"name"`
+	DeviceClass         string `json:"device_class,omitempty"`
+	StateTopic          string `json:"state_topic"`
+	UniqueID            string `json:"unique_id"`
+	ValueTemplate       string `json:"value_template,omitempty"`
+	Device              Device `json:"device"`
+	ExpireAfter         int    `json:"expire_after,omitempty"`
+	ForceUpdate         bool   `json:"force_update"`
+	StateClass          string `json:"state_class,omitempty"`
+	UnitOfMeasurement   string `json:"unit_of_measurement,omitempty"`
+	JsonAttributesTopic string `json:"json_attributes_topic,omitempty"`
 }
 
 // ZFS pool properties
@@ -79,14 +82,4 @@ type MQTT struct {
 type SystemPubConfig struct {
 	MQTTServer MQTT          `yaml:"mqttserver"`
 	Loglevel   zerolog.Level `yaml:"loglevel"`
-}
-
-// Default MQTT server configuration
-func MQTTdefault() MQTT {
-	return MQTT{Host: YAMLURL{&url.URL{Scheme: "mqtt", Host: "localhost:1883"}}}
-}
-
-// Default application configuration
-func SystemPubConfigDefault() SystemPubConfig {
-	return SystemPubConfig{MQTTServer: MQTTdefault(), Loglevel: zerolog.InfoLevel}
 }
