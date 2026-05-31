@@ -4,12 +4,12 @@ Documentation=https://github.com/ykgmfq/SystemPub
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/SystemPub
+ExecStart=/usr/bin/systempub
 Restart=on-failure
 WatchdogSec=1min
 Type=notify
 NotifyAccess=all
-#LoadCredential=mqtt:/etc/mqtt_pw.txt
+LoadCredential=mqtt:/etc/mqtt_pw.txt
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

@@ -3,7 +3,7 @@
   "image": "mcr.microsoft.com/devcontainers/go:1.26",
   "features": {
     "ghcr.io/devcontainers-extra/features/apt-packages:1": {
-      "packages": "just"
+      "packages": "just,squashfs-tools"
     }
   },
   "customizations": {
