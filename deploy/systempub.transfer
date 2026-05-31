@@ -1,0 +1,13 @@
+[Transfer]
+Verify=yes
+
+[Source]
+Type=oci
+Path=ghcr.io/ykgmfq/systempub
+MatchPattern=v@v
+
+[Target]
+Type=regular-file
+Path=/var/lib/extensions/
+MatchPattern=systempub-@v.raw
+CurrentSymlink=/var/lib/extensions/systempub.raw

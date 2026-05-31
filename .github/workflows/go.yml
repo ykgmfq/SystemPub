@@ -6,6 +6,7 @@ permissions:
 on:
   push:
     branches: ["main"]
+    tags: ["v*"]
   pull_request:
     branches: ["main"]
 jobs:
@@ -38,3 +39,39 @@ jobs:
         with:
           go-version-file: "go.mod"
       - run: just test
+  release:
+    runs-on: ubuntu-latest
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: extractions/setup-just@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+      - uses: oras-project/setup-oras@v1
+      - run: sudo apt-get install -y squashfs-tools
+      - run: just sysext amd64 && just sysext arm64
+      - name: Login to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Push to ghcr.io
+        id: push
+        env:
+          IMAGE_BASE: ghcr.io/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/push-sysext.sh
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.push.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.amd64_digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.push.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.arm64_digest }}
+          push-to-registry: true
