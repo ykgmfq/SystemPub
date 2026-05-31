@@ -7,7 +7,6 @@ Path=ghcr.io/ykgmfq/systempub
 MatchPattern=v@v
 
 [Target]
-Type=regular-file
+Type=directory
 Path=/var/lib/extensions/
-MatchPattern=systempub-@v.raw
-CurrentSymlink=/var/lib/extensions/systempub.raw
+MatchPattern=systempub

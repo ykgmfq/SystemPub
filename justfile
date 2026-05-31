@@ -21,7 +21,7 @@ build arch="":
 test:
     go test -v ./...
 
-# build sysext squashfs image for the given architecture (default: amd64)
+# build sysext directory archive for the given architecture (default: amd64)
 sysext arch="amd64": (build arch)
     #!/usr/bin/env bash
     set -eu
@@ -33,9 +33,9 @@ sysext arch="amd64": (build arch)
     cp deploy/systempub.transfer $staging/usr/lib/sysupdate.d/systempub.transfer
     sys_arch=$([ "{{ arch }}" = "amd64" ] && echo "x86-64" || echo "arm64")
     ext_release=$staging/usr/lib/extension-release.d/extension-release.systempub
-    printf 'ID=_any\nARCHITECTURE=%s\n' "$sys_arch" > "$ext_release"
-    out=/tmp/systempub-{{ arch }}-${VERSION}.raw
-    mksquashfs $staging $out -noappend -comp zstd -quiet
+    printf 'ID=_any\nARCHITECTURE=%s\nSYSEXT_SCOPE=system\n' "$sys_arch" > "$ext_release"
+    out=/tmp/systempub-{{ arch }}-${VERSION}.tar.xz
+    tar -cJf "$out" -C "$staging" .
     echo "Built $out"
 
 # verify the OCI push flow locally using a temporary OCI image layout
@@ -48,7 +48,7 @@ test-push: (sysext "amd64") (sysext "arm64")
         config=/tmp/config-${arch}.json
         echo "{\"architecture\":\"${arch}\",\"os\":\"linux\"}" > "$config"
         config_arg="${config}:application/vnd.oci.image.config.v1+json"
-        raw=/tmp/systempub-${arch}-{{ version }}.raw
+        raw=/tmp/systempub-${arch}-{{ version }}.tar.xz
         oras push --oci-layout --disable-path-validation --config "$config_arg" "${layout}:${tag}-${arch}" "$raw"
         echo "${arch} digest: $(oras resolve --oci-layout "${layout}:${tag}-${arch}")"
     done

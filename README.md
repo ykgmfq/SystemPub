@@ -13,13 +13,26 @@ The pool state and system unit state are published as [binary sensors](https://w
 Autodiscovery is supported, so there is no need for any further configuration in Home Assistant.
 
 ## Installation
-Grab the binary from the latest release page and copy it to `/usr/local/bin/`.
-Copy `systempub.service` to `/etc/systemd/system` and activate the service:
+
+SystemPub is distributed as a [systemd system extension](https://www.freedesktop.org/software/systemd/man/systemd-sysext.html) and kept up to date via `systemd-sysupdate`.
+
+Bootstrap by placing the transfer definition and running the first update:
+
 ```sh
-systemctl daemon-reload
+mkdir -p /etc/sysupdate.d
+curl -sfo /etc/sysupdate.d/systempub.transfer https://raw.githubusercontent.com/ykgmfq/SystemPub/main/deploy/systempub.transfer
+systemd-sysupdate update
+systemd-sysext merge
+```
+
+Then enable the service:
+
+```sh
 systemctl enable --now systempub
 systemctl status systempub
 ```
+
+Future updates are applied with `systemd-sysupdate update && systemd-sysext merge`.
 
 ## Configuration
 
@@ -49,7 +62,12 @@ mqttserver:
   username: backup1
 ```
 
-Pass the password as a [Service Credential](https://systemd.io/CREDENTIALS) named `mqtt` as shown in the service file in this repo.
+Store the MQTT password in `/etc/mqtt_pw.txt` — systemd loads it as a [service credential](https://systemd.io/CREDENTIALS) named `mqtt`:
+
+```sh
+echo -n 'your_mqtt_password' > /etc/mqtt_pw.txt
+chmod 600 /etc/mqtt_pw.txt
+```
 
 ## Home Assistant
 SystemPub registers the host device with Home Assistant and adds the sensors to it.
