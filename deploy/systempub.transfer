@@ -2,11 +2,11 @@
 Verify=no
 
 [Source]
-Type=url
-Path=https://github.com/ykgmfq/SystemPub/releases/download/v@v/systempub-amd64-@v.tar.xz
+Type=url-tar
+Path=https://github.com/ykgmfq/SystemPub/releases/latest/download/
 MatchPattern=systempub-@v.tar.xz
 
 [Target]
 Type=directory
 Path=/var/lib/extensions/
-MatchPattern=systempub
+MatchPattern=systempub_@v
