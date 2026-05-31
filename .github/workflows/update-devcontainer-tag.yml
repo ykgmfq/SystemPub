@@ -1,14 +1,14 @@
 name: Update DevContainer
 on:
   schedule:
-    - cron: '0 4 * * 1' # Monday 04:00 UTC
+    - cron: "0 4 * * 1"
   workflow_dispatch:
 jobs:
   update-tag:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
       - name: Update devcontainer.json if needed
