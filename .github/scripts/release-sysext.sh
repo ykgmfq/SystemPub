@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
-cd /tmp
+pushd /tmp
 sha256sum systempub-*.tar.xz > SHA256SUMS
-assets=(systempub-*.tar.xz SHA256SUMS)
-gh release create "$TAG" --title "$TAG" --generate-notes "${assets[@]}"
+popd
+gh release create "$TAG" --title "$TAG" --generate-notes /tmp/systempub-*.tar.xz /tmp/SHA256SUMS
