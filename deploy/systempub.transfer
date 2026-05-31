@@ -4,7 +4,7 @@ Verify=no
 [Source]
 Type=url-tar
 Path=https://github.com/ykgmfq/SystemPub/releases/latest/download/
-MatchPattern=systempub-@v.tar.xz
+MatchPattern=systempub-amd64-@v.tar.xz
 
 [Target]
 Type=directory
