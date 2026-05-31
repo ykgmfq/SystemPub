@@ -59,10 +59,13 @@ jobs:
       - run: just sysext amd64 && just sysext arm64
       - name: Login to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Set image base
+        id: image_base
+        run: echo "value=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - name: Push to ghcr.io
         id: push
         env:
-          IMAGE_BASE: ghcr.io/${{ github.repository }}
+          IMAGE_BASE: ${{ steps.image_base.outputs.value }}
           TAG: ${{ github.ref_name }}
         run: bash .github/scripts/push-sysext.sh
       - uses: actions/attest-build-provenance@v4
