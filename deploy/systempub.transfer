@@ -1,10 +1,10 @@
 [Transfer]
-Verify=yes
+Verify=no
 
 [Source]
-Type=oci
-Path=ghcr.io/ykgmfq/systempub
-MatchPattern=v@v
+Type=url
+Path=https://github.com/ykgmfq/SystemPub/releases/download/v@v/systempub-amd64-@v.tar.xz
+MatchPattern=systempub-@v.tar.xz
 
 [Target]
 Type=directory

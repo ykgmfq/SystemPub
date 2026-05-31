@@ -30,7 +30,7 @@ sysext arch="amd64": (build arch)
     cp /tmp/systempub-{{ arch }} $staging/usr/bin/systempub
     chmod 755 $staging/usr/bin/systempub
     cp deploy/systempub.service $staging/usr/lib/systemd/system/
-    cp deploy/systempub.transfer $staging/usr/lib/sysupdate.d/systempub.transfer
+    sed 's/amd64/{{ arch }}/' deploy/systempub.transfer > $staging/usr/lib/sysupdate.d/systempub.transfer
     sys_arch=$([ "{{ arch }}" = "amd64" ] && echo "x86-64" || echo "arm64")
     ext_release=$staging/usr/lib/extension-release.d/extension-release.systempub
     printf 'ID=_any\nARCHITECTURE=%s\nSYSEXT_SCOPE=system\n' "$sys_arch" > "$ext_release"
