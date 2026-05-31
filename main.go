@@ -26,7 +26,7 @@ import (
 
 var (
 	logger  zerolog.Logger
-	version = "1.3.0"
+	version = "1.3.1"
 )
 
 // Reads the MQTT password from systemd credentials directory

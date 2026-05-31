@@ -56,7 +56,10 @@ jobs:
           go-version-file: "go.mod"
       - uses: oras-project/setup-oras@v1
       - run: sudo apt-get install -y squashfs-tools
-      - run: just sysext amd64 && just sysext arm64
+      - name: Build sysext images
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/build-sysext.sh
       - name: Login to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Set image base
