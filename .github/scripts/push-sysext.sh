@@ -10,7 +10,7 @@ for arch in amd64 arm64; do
   config_arg="${config}:application/vnd.oci.image.config.v1+json"
   raw=/tmp/systempub-${arch}-${ver}.raw
   ref="${IMAGE_BASE}:${TAG}-${arch}"
-  oras push --config "$config_arg" "$ref" "$raw"
+  oras push --disable-path-validation --config "$config_arg" "$ref" "$raw"
   echo "${arch}_digest=$(oras resolve "$ref")" >> "$GITHUB_OUTPUT"
 done
 
