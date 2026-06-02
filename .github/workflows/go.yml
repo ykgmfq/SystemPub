@@ -54,7 +54,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
-      - uses: oras-project/setup-oras@v1
+      - uses: oras-project/setup-oras@v2
       - name: Build sysext images
         env:
           TAG: ${{ github.ref_name }}
