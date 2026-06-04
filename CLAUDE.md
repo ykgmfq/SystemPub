@@ -2,6 +2,8 @@
 
 Go application that publishes system metrics (ZFS pool status, snapshots) to MQTT for Home Assistant autodiscovery.
 
+For additional context on installation, configuration, and updates, consult the [project wiki](https://github.com/ykgmfq/SystemPub/wiki).
+
 ## Project layout
 
 - `models/` — shared type and model definitions (no business logic)
@@ -57,6 +59,10 @@ Deployment artifacts go in `deploy/`.
 
 **In markdown files, each sentence starts on its own line.**
 This keeps git diffs clean — a change to one line only touches one sentence.
+
+**Human-facing text uses proper prose — clear, concise, natural language.**
+This applies to markdown files, comments, commit messages, and any other text a person reads.
+Write in full sentences, avoid terse shorthand, and prefer plain words over jargon.
 
 **In GitHub Actions workflows, put longer `run:` blocks into shell script files.**
 Keep one-liners inline.
