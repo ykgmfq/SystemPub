@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git commit *)",
+      "Bash(git commit)"
+    ],
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git rm *)",
+      "Bash(git stage *)",
+      "Bash(go *)",
+      "Bash(just *)",
+      "Bash(chmod *)",
+      "WebFetch(domain:mcr.microsoft.com)",
+      "WebFetch(domain:ghcr.io)",
+      "WebFetch(domain:www.home-assistant.io)"
+    ]
+  }
+}
