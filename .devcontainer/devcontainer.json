@@ -1,7 +1,10 @@
 {
   "name": "Go",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "args": {
+      "GO_TAG": "1.26"
+    }
   },
   "customizations": {
     "vscode": {
