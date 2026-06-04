@@ -1,33 +1,12 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-name: Go
+name: Release
 permissions:
   contents: read
 on:
   push:
-    branches: ["main"]
     tags: ["v*"]
-  pull_request:
-    branches: ["main"]
 jobs:
-  changes:
-    runs-on: ubuntu-slim
-    outputs:
-      go: ${{ steps.filter.outputs.go }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            go:
-              - '**/*.go'
-              - 'go.mod'
-              - 'go.sum'
   build:
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.go == 'true' || startsWith(github.ref, 'refs/tags/v')
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -37,8 +16,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
-      - run: |
-          just build ${{ matrix.arch }}
+      - run: just build ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         with:
           name: systempub-${{ matrix.arch }}
@@ -47,8 +25,6 @@ jobs:
           compression-level: 0
   test:
     runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.go == 'true' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v6
       - uses: extractions/setup-just@v4
@@ -58,8 +34,7 @@ jobs:
       - run: just test
   release:
     runs-on: ubuntu-latest
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, test]
     permissions:
       contents: write
       packages: write
@@ -68,14 +43,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: extractions/setup-just@v4
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: "go.mod"
       - uses: oras-project/setup-oras@v2
-      - name: Build sysext images
+      - uses: actions/download-artifact@v4
+        with:
+          name: systempub-amd64
+          path: /tmp/
+      - uses: actions/download-artifact@v4
+        with:
+          name: systempub-arm64
+          path: /tmp/
+      - name: Package sysext images
         env:
           TAG: ${{ github.ref_name }}
-        run: bash .github/scripts/build-sysext.sh
+        run: bash .github/scripts/package-sysext.sh
       - name: Login to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Set image base

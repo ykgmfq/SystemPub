@@ -21,8 +21,8 @@ build arch="":
 test:
     go test -v ./...
 
-# build sysext directory archive for the given architecture (default: amd64)
-sysext arch="amd64": (build arch)
+# package binary into sysext archive (binary must already be at /tmp/systempub-{{ arch }})
+package arch="amd64":
     #!/usr/bin/env bash
     set -eu
     staging=$(mktemp -d); trap "rm -rf $staging" EXIT
@@ -37,6 +37,9 @@ sysext arch="amd64": (build arch)
     out=/tmp/systempub-{{ arch }}-${VERSION}.tar.xz
     tar -cJf "$out" -C "$staging" .
     echo "Built $out"
+
+# build binary and package into sysext archive
+sysext arch="amd64": (build arch) (package arch)
 
 # verify the OCI push flow locally using a temporary OCI image layout
 test-push: (sysext "amd64") (sysext "arm64")
