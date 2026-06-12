@@ -47,6 +47,9 @@ grep '# expiration date' ~/.config/copr   # shows the new expiry
 
 - Rotating the token immediately invalidates the old one.
   Do not rotate while a release workflow run is in flight, or its "Submit COPR build" step will fail with the stale secret.
+  The release and refresh jobs share a concurrency group, so the workflows themselves cannot race; a manual rotation can.
+- After each monthly rotation, only the GitHub secret holds the current token, and secrets cannot be read back.
+  A local `~/.config/copr` therefore goes stale within a month; fetch a fresh config from <https://copr.fedorainfracloud.org/api/> when local copr-cli access is needed.
 - `pip install copr-cli` does not pull in `rich`, which copr-cli 2.5 imports at startup.
   The devcontainer Dockerfile installs it explicitly; symptom otherwise is `ModuleNotFoundError: No module named 'rich'`.
 - `new-api-token` requires `~/.config/copr` to exist, be writable, and contain `login`/`token` keys; it refuses to run for gssapi-only configs.

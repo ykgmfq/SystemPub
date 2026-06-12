@@ -11,7 +11,11 @@ export DEBFULLNAME="Dennis M. Pöpperl"
 series=resolute
 ubuntu_version=26.04
 ver=${TAG#v}
-debversion="$ver-1ppa1~ubuntu$ubuntu_version"
+
+# Launchpad permanently rejects re-uploads of a version it has accepted.
+# Bump PPA_REVISION when a fixed package for the same release must go out.
+revision=${PPA_REVISION:-1}
+debversion="$ver-1ppa$revision~ubuntu$ubuntu_version"
 
 tarball=$(bash .github/scripts/build-tarball.sh | tail -1)
 workdir=$(dirname "$tarball")

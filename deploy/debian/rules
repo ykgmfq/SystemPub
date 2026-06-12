@@ -4,6 +4,9 @@ export CGO_ENABLED = 0
 export GOFLAGS = -mod=vendor
 export GOPROXY = off
 export GOTOOLCHAIN = local
+# The Launchpad builders have no writable home directory,
+# so the Go build cache must live inside the build tree.
+export GOCACHE = $(CURDIR)/.gocache
 
 %:
 	dh $@
