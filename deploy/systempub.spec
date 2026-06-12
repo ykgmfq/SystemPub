@@ -2,7 +2,9 @@
 %global debug_package %{nil}
 
 Name:           systempub
-Version:        %{?pkgver}%{!?pkgver:0}
+# The version is substituted in by build-srpm.sh; the spec inside the SRPM
+# must carry a literal version because COPR re-evaluates it without macros.
+Version:        0
 Release:        1%{?dist}
 Summary:        Publish ZFS pool and systemd unit state to MQTT for Home Assistant
 License:        GPL-3.0-only
