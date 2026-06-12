@@ -1,6 +1,6 @@
 ARG GO_TAG
-ARG ORAS_TAG
-FROM ghcr.io/oras-project/oras:${ORAS_TAG} AS oras
 FROM mcr.microsoft.com/devcontainers/go:${GO_TAG}
-RUN apt-get update && apt-get install -y just gh && rm -rf /var/lib/apt/lists/*
-COPY --from=oras /bin/oras /usr/local/bin/oras
+RUN apt-get update && apt-get install -y just gh python3-venv && rm -rf /var/lib/apt/lists/*
+# copr-cli is not packaged for Debian, so install it into its own virtualenv.
+# rich is an undeclared runtime dependency of copr-cli 2.5.
+RUN python3 -m venv /opt/copr-cli && /opt/copr-cli/bin/pip install --no-cache-dir copr-cli rich && ln -s /opt/copr-cli/bin/copr-cli /usr/local/bin/copr-cli

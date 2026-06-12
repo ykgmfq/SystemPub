@@ -1,0 +1,2 @@
+systempub usr/bin
+deploy/systempub.service usr/lib/systemd/system

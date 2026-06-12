@@ -1,0 +1,23 @@
+name: Refresh COPR token
+permissions:
+  contents: read
+on:
+  schedule:
+    - cron: "17 4 1 * *"
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    container: quay.io/fedora/fedora-minimal:latest
+    # Serialized with the release job so a rotation never invalidates
+    # the token while a COPR submission is in flight.
+    concurrency: copr-token
+    steps:
+      - name: Install tools
+        run: dnf install -y copr-cli gh git-core
+      - uses: actions/checkout@v6
+      - name: Rotate token and update secret
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          GH_TOKEN: ${{ secrets.SECRETS_PAT }}
+        run: bash .github/scripts/refresh-copr-token.sh

@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: SystemPub
+Source: https://github.com/ykgmfq/SystemPub
+
+Files: *
+Copyright: 2024-2026 Dennis M. Pöpperl <accounts@dm-poepperl.de>
+License: GPL-3
+ On Debian systems, the complete text of the GNU General Public
+ License version 3 can be found in /usr/share/common-licenses/GPL-3.

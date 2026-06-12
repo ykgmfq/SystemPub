@@ -20,4 +20,11 @@ sudo curl -o /etc/yum.repos.d/systempub.repo https://copr.fedorainfracloud.org/c
 sudo rpm-ostree install systempub
 ```
 
+On Ubuntu, install from the [PPA](https://launchpad.net/~ykgmfq/+archive/ubuntu/systempub):
+
+```sh
+sudo add-apt-repository ppa:ykgmfq/systempub
+sudo apt install systempub
+```
+
 Check the [wiki](https://github.com/ykgmfq/SystemPub/wiki) for the full installation guide!

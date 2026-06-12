@@ -9,7 +9,7 @@ Release:        1%{?dist}
 Summary:        Publish ZFS pool and systemd unit state to MQTT for Home Assistant
 License:        GPL-3.0-only
 URL:            https://github.com/ykgmfq/SystemPub
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{name}-%{version}.tar.xz
 
 BuildRequires:  golang >= 1.26
 BuildRequires:  systemd-rpm-macros

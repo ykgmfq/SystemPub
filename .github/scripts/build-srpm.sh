@@ -2,17 +2,8 @@
 set -eu
 
 ver=${TAG#v}
-workdir=$(mktemp -d)
-srcdir="$workdir/systempub-$ver"
-
-# Stage the tracked sources only, then vendor the Go dependencies.
-# COPR builds run without network access, so the tarball must be self-contained.
-mkdir -p "$srcdir"
-git archive HEAD | tar -x -C "$srcdir"
-pushd "$srcdir"
-go mod vendor
-popd
-tar -czf "$workdir/systempub-$ver.tar.gz" -C "$workdir" "systempub-$ver"
+tarball=$(bash .github/scripts/build-tarball.sh | tail -1)
+workdir=$(dirname "$tarball")
 
 # Write the release version into the spec.
 # The spec travels inside the SRPM and COPR re-evaluates it there,

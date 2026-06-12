@@ -1,0 +1,14 @@
+Source: systempub
+Section: admin
+Priority: optional
+Maintainer: Dennis M. Pöpperl <free-software@dm-poepperl.de>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.26~)
+Standards-Version: 4.7.0
+Homepage: https://github.com/ykgmfq/SystemPub
+
+Package: systempub
+Architecture: amd64 arm64
+Depends: ${misc:Depends}
+Description: Publish ZFS pool and systemd unit state to MQTT for Home Assistant
+ SystemPub monitors ZFS pools and systemd units and reports their state
+ to Home Assistant via MQTT autodiscovery.

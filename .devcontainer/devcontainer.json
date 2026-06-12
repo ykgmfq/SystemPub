@@ -3,8 +3,7 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "GO_TAG": "1.26",
-      "ORAS_TAG": "v1.3.2"
+      "GO_TAG": "1.26"
     }
   },
   "customizations": {

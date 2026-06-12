@@ -14,10 +14,34 @@ jobs:
         with:
           go-version-file: "go.mod"
       - run: just test
+  ppa:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper dput
+      - name: Check that the tag matches the version in main.go
+        run: test "v$(awk -F'"' '/version =/ {print $2}' main.go)" = "$GITHUB_REF_NAME"
+      - name: Import signing key
+        env:
+          PPA_GPG_KEY: ${{ secrets.PPA_GPG_KEY }}
+        run: printf '%s' "$PPA_GPG_KEY" | gpg --import
+      - name: Submit to Launchpad
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/submit-ppa.sh
   release:
     runs-on: ubuntu-latest
     needs: [test]
-    container: fedora:latest
+    # Keep in step with the COPR chroots and the repo file in the README.
+    container: quay.io/fedora/fedora:44
+    # Serialized with the token refresh workflow, which invalidates the
+    # old COPR token when it rotates.
+    concurrency: copr-token
     permissions:
       contents: write
     steps:
