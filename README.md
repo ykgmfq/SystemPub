@@ -12,4 +12,12 @@ All sensors appear in Home Assistant automatically through MQTT autodiscovery â€
 
 ## Getting started
 
-Check the wiki for an installation guide!
+SystemPub is distributed as an RPM via [COPR](https://copr.fedorainfracloud.org/coprs/adneos/systempub/).
+On Fedora CoreOS, download the repository file and layer the package:
+
+```sh
+sudo curl -o /etc/yum.repos.d/systempub.repo https://copr.fedorainfracloud.org/coprs/adneos/systempub/repo/fedora-44/adneos-systempub-fedora-44.repo
+sudo rpm-ostree install systempub
+```
+
+Check the [wiki](https://github.com/ykgmfq/SystemPub/wiki) for the full installation guide!

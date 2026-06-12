@@ -5,24 +5,6 @@ on:
   push:
     tags: ["v*"]
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: extractions/setup-just@v4
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: "go.mod"
-      - run: just build ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: systempub-${{ matrix.arch }}
-          path: /tmp/systempub-${{ matrix.arch }}
-          if-no-files-found: error
-          compression-level: 0
   test:
     runs-on: ubuntu-latest
     steps:
@@ -34,51 +16,31 @@ jobs:
       - run: just test
   release:
     runs-on: ubuntu-latest
-    needs: [build, test]
+    needs: [test]
+    container: fedora:latest
     permissions:
       contents: write
-      packages: write
-      id-token: write
-      attestations: write
     steps:
+      - name: Install build tools
+        run: dnf install -y copr-cli rpm-build golang git-core gh
       - uses: actions/checkout@v6
-      - uses: extractions/setup-just@v4
-      - uses: oras-project/setup-oras@v2
-      - uses: actions/download-artifact@v4
-        with:
-          name: systempub-amd64
-          path: /tmp/
-      - uses: actions/download-artifact@v4
-        with:
-          name: systempub-arm64
-          path: /tmp/
-      - name: Package sysext images
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check that the tag matches the version in main.go
+        run: test "v$(awk -F'"' '/version =/ {print $2}' main.go)" = "$GITHUB_REF_NAME"
+      - name: Build SRPM
+        id: srpm
         env:
           TAG: ${{ github.ref_name }}
-        run: bash .github/scripts/package-sysext.sh
-      - name: Login to ghcr.io
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - name: Set image base
-        id: image_base
-        run: echo "value=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - name: Push to ghcr.io
-        id: push
+        run: bash .github/scripts/build-srpm.sh
+      - name: Submit COPR build
         env:
-          IMAGE_BASE: ${{ steps.image_base.outputs.value }}
-          TAG: ${{ github.ref_name }}
-        run: bash .github/scripts/push-sysext.sh
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ steps.push.outputs.image }}
-          subject-digest: ${{ steps.push.outputs.amd64_digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ steps.push.outputs.image }}
-          subject-digest: ${{ steps.push.outputs.arm64_digest }}
-          push-to-registry: true
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          SRPM: ${{ steps.srpm.outputs.srpm }}
+        run: bash .github/scripts/submit-copr.sh
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: bash .github/scripts/release-sysext.sh
+          SRPM: ${{ steps.srpm.outputs.srpm }}
+        run: bash .github/scripts/release-github.sh
