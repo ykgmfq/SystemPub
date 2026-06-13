@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/signal"
@@ -43,10 +45,14 @@ func loadMQTTPassword() (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// Reads the configuration file and returns the application configuration
+// Reads the configuration file and returns the application configuration.
 func readConfig(location string) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
+	if errors.Is(err, fs.ErrNotExist) {
+		logger.Warn().Str("mod", "main").Str("location", location).Msg("Configuration file not found, using defaults")
+		return config, nil
+	}
 	if err != nil {
 		logger.Warn().Str("mod", "main").Err(err).Msg("")
 		return config, err

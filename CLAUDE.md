@@ -64,6 +64,10 @@ This keeps git diffs clean — a change to one line only touches one sentence.
 This applies to markdown files, comments, commit messages, and any other text a person reads.
 Write in full sentences, avoid terse shorthand, and prefer plain words over jargon.
 
+**Keep implementation details in comments and markdown to a minimum.**
+State intent and rationale — the why — rather than restating how the code works.
+Mechanics duplicated in prose drift out of sync with the code they describe, so let the code be the source of truth.
+
 **In GitHub Actions workflows, put longer `run:` blocks into shell script files.**
 Keep one-liners inline.
 Scripts live in `.github/scripts/` and are referenced from the workflow step.
