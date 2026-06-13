@@ -17,11 +17,5 @@ override_dh_auto_build:
 override_dh_auto_test:
 	go test ./...
 
-# The service needs /etc/mqtt_pw.txt before it can run,
-# so do not enable or start it on installation. This matches
-# the behaviour of the RPM package.
-override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
-
 # The binary is built static and already stripped by the linker flags.
 override_dh_strip override_dh_dwz:

@@ -32,6 +32,8 @@ go test -mod=vendor ./...
 %install
 install -Dpm 0755 systempub %{buildroot}%{_bindir}/systempub
 install -Dpm 0644 deploy/systempub.service %{buildroot}%{_unitdir}/systempub.service
+# Ship a preset so %%systemd_post enables the unit on first install.
+install -Dpm 0644 deploy/85-systempub.preset %{buildroot}%{_presetdir}/85-systempub.preset
 
 %post
 %systemd_post systempub.service
@@ -47,6 +49,7 @@ install -Dpm 0644 deploy/systempub.service %{buildroot}%{_unitdir}/systempub.ser
 %doc README.md
 %{_bindir}/systempub
 %{_unitdir}/systempub.service
+%{_presetdir}/85-systempub.preset
 
 %changelog
 * Thu Jun 11 2026 Dennis M. Pöpperl <accounts@dm-poepperl.de> - 1.4.0-1
