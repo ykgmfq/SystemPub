@@ -14,6 +14,10 @@ ver=${TAG#v}
 
 # Launchpad permanently rejects re-uploads of a version it has accepted.
 # Bump PPA_REVISION when a fixed package for the same release must go out.
+# Such a re-upload cannot run through this script if the repository moved,
+# because the orig tarball must stay byte-identical to the accepted one:
+# download it from the PPA, unpack it, copy deploy/debian in, and build
+# with debuild -S -d -sd so the orig is referenced but not re-uploaded.
 revision=${PPA_REVISION:-1}
 debversion="$ver-1ppa$revision~ubuntu$ubuntu_version"
 
