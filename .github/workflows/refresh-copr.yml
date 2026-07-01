@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Install tools
         run: dnf install -y copr-cli gh git-core
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Rotate token and update secret
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
