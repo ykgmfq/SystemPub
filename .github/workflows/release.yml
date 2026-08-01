@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: extractions/setup-just@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
       - run: just test
@@ -19,7 +19,7 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
       - name: Install packaging tools
