@@ -3,7 +3,7 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "GO_TAG": "1.26"
+      "GO_TAG": "1.27"
     }
   },
   "customizations": {
