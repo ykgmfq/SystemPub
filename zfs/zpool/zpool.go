@@ -119,7 +119,7 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 		entries = append(entries, zpoolSensorEntry{
 			config:  makeSensorConfig("Allocated space", allocUID, "sensor", "data_size", "measurement", "GiB", device, interval),
 			domain:  "sensor",
-			payload: func() []byte { return []byte(fmt.Sprintf("%.2f", allocVal)) },
+			payload: func() []byte { return fmt.Appendf(nil, "%.2f", allocVal) },
 		})
 
 		totalVal := float64(rootVdev.TotalSpace) / gib
@@ -127,7 +127,7 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 		entries = append(entries, zpoolSensorEntry{
 			config:  makeSensorConfig("Total space", totalUID, "sensor", "data_size", "measurement", "GiB", device, interval),
 			domain:  "sensor",
-			payload: func() []byte { return []byte(fmt.Sprintf("%.2f", totalVal)) },
+			payload: func() []byte { return fmt.Appendf(nil, "%.2f", totalVal) },
 		})
 
 		freeVal := float64(rootVdev.TotalSpace-rootVdev.AllocSpace) / gib
@@ -135,7 +135,7 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 		entries = append(entries, zpoolSensorEntry{
 			config:  makeSensorConfig("Free space", freeUID, "sensor", "data_size", "measurement", "GiB", device, interval),
 			domain:  "sensor",
-			payload: func() []byte { return []byte(fmt.Sprintf("%.2f", freeVal)) },
+			payload: func() []byte { return fmt.Appendf(nil, "%.2f", freeVal) },
 		})
 	}
 
@@ -208,7 +208,9 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 func NewZpoolProvider(interval time.Duration) *ZpoolProvider {
 	return &ZpoolProvider{
 		interval: interval,
-		execFn:   func(ctx context.Context, name string, arg ...string) zpoolExecutor { return exec.CommandContext(ctx, name, arg...) },
+		execFn: func(ctx context.Context, name string, arg ...string) zpoolExecutor {
+			return exec.CommandContext(ctx, name, arg...)
+		},
 	}
 }
 

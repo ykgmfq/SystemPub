@@ -14,8 +14,7 @@ import (
 
 func makeExitError(code int) *exec.ExitError {
 	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr
 	}
 	return nil
@@ -52,7 +51,9 @@ func TestGetPoolStatePoolProblem(t *testing.T) {
 	for exitcode := 1; exitcode <= 4; exitcode++ {
 		sanoidErr := makeExitError(exitcode)
 		assert.NotNil(t, sanoidErr, "Failed to create exit error for code %d", exitcode)
-		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor { return &MockCommandExecutor{err: sanoidErr} }
+		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
+			return &MockCommandExecutor{err: sanoidErr}
+		}
 		result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
 		assert.NoError(t, err, "Expected no error on exit codes 1-4")
 		assert.False(t, result, "Expected pool state to be false on exit codes 1-4")
@@ -61,7 +62,9 @@ func TestGetPoolStatePoolProblem(t *testing.T) {
 
 func TestGetPoolStateSanoidProblem(t *testing.T) {
 	for _, testerr := range []error{makeExitError(255), makeExitError(5), exec.ErrNotFound} {
-		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor { return &MockCommandExecutor{err: testerr} }
+		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
+			return &MockCommandExecutor{err: testerr}
+		}
 		result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
 		assert.Equal(t, testerr, err, "Expected error to be escalated")
 		assert.False(t, result, "Expected pool state to be false on sanoid problem")
@@ -71,7 +74,9 @@ func TestGetPoolStateSanoidProblem(t *testing.T) {
 func TestGetPoolStateKilled(t *testing.T) {
 	killedErr := makeKilledError(t)
 	assert.Equal(t, -1, killedErr.ExitCode())
-	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor { return &MockCommandExecutor{err: killedErr} }
+	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
+		return &MockCommandExecutor{err: killedErr}
+	}
 	result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
 	assert.Equal(t, killedErr, err, "Expected killed-process error to be escalated")
 	assert.False(t, result)
