@@ -169,10 +169,18 @@ func main() {
 	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute)
 	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, zfsServer.Discover, wdconn)
 
-	go mqttClient.Serve(ctx)
+	// A failed publisher must end the process, so that systemd stops getting watchdog pings and restarts the service.
+	mqttErr := make(chan error, 1)
+	go func() { mqttErr <- mqttClient.Serve(ctx) }()
 	go systemdClient.Serve(ctx)
 	go zfsServer.Serve(ctx)
 	go watchdog(ctx, wdconn)
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case err := <-mqttErr:
+		if err != nil {
+			logger.Fatal().Str("mod", "main").Err(err).Msg("MQTT publisher stopped")
+		}
+	}
 }

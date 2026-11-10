@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -181,23 +182,22 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 }
 
 // Long-running routine that handles the MQTT connection and publishes messages.
-func (client Mqttclient) Serve(ctx context.Context) {
+// It returns nil when the context is cancelled and an error when publishing can no longer continue.
+func (client Mqttclient) Serve(ctx context.Context) error {
 	mqttctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	connManage, err := client.createConnection(mqttctx)
 	if err != nil {
-		Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to create connection")
-		return
+		return fmt.Errorf("failed to create MQTT connection: %w", err)
 	}
 	for {
 		select {
 		case <-mqttctx.Done():
 			Logger.Info().Str("mod", "mqtt").Msg("Routine stopped")
-			return
+			return nil
 		case pub, ok := <-client.Pubs:
 			if !ok {
-				Logger.Info().Str("mod", "mqtt").Msg("Work channel closed, exiting routine")
-				return
+				return errors.New("MQTT work channel closed")
 			}
 			if _, err := connManage.Publish(mqttctx, pub); err != nil {
 				Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to publish")
