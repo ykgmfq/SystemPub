@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -88,4 +90,21 @@ func TestLoadMQTTPassword_FileMissing(t *testing.T) {
 	pw, err := loadMQTTPassword()
 	assert.Error(t, err)
 	assert.Equal(t, "", pw)
+}
+
+// Without a systemd watchdog, connection updates must still be consumed so the MQTT client never blocks on them.
+func TestWatchdogConsumesWithoutSystemd(t *testing.T) {
+	t.Setenv("WATCHDOG_USEC", "")
+	t.Setenv("NOTIFY_SOCKET", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn := make(chan bool)
+	go watchdog(ctx, conn)
+	for _, connected := range []bool{true, false, true} {
+		select {
+		case conn <- connected:
+		case <-time.After(time.Second):
+			t.Fatal("watchdog did not consume connection update")
+		}
+	}
 }

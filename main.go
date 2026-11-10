@@ -66,15 +66,21 @@ func readConfig(location string) (models.SystemPubConfig, error) {
 	return config, nil
 }
 
-// Systemd watchdog
+// Reports readiness and connection status to systemd and pets the watchdog when one is configured.
+// It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
 func watchdog(ctx context.Context, conn chan bool) {
 	watchTime, err := daemon.SdWatchdogEnabled(false)
-	if err != nil || watchTime <= 0 {
-		return
+	if err != nil {
+		logger.Warn().Str("mod", "main").Err(err).Msg("Could not determine systemd watchdog settings")
 	}
 	daemon.SdNotify(false, daemon.SdNotifyReady)
 	daemon.SdNotify(false, "STATUS=Connecting...")
-	timer := time.NewTicker(watchTime / 2)
+	var ticks <-chan time.Time
+	if err == nil && watchTime > 0 {
+		timer := time.NewTicker(watchTime / 2)
+		defer timer.Stop()
+		ticks = timer.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -88,7 +94,7 @@ func watchdog(ctx context.Context, conn chan bool) {
 				status = "Disconnected from MQTT server"
 			}
 			daemon.SdNotify(false, "STATUS="+status)
-		case <-timer.C:
+		case <-ticks:
 			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 		}
 	}
