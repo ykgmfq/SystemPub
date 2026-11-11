@@ -13,22 +13,14 @@ import (
 	"github.com/ykgmfq/SystemPub/zfs/zpool"
 )
 
-var Logger zerolog.Logger
-
-// ZfsServer runs all ZFS providers on a ticker and publishes to MQTT.
-type ZfsServer struct {
-	Discover  chan bool
-	providers []Provider
-	interval  time.Duration
-	pubs      chan *paho.Publish
-}
-
-func NewZfsServer(pubs chan *paho.Publish, device models.Device, interval time.Duration) ZfsServer {
+// NewZfsServer returns a server that runs the sanoid and zpool providers.
+func NewZfsServer(pubs chan *paho.Publish, device models.Device, interval time.Duration, logger zerolog.Logger) ZfsServer {
 	return ZfsServer{
 		Discover:  make(chan bool),
-		providers: []Provider{sanoid.NewSanoidProvider(device, interval), zpool.NewZpoolProvider(interval)},
+		providers: []Provider{sanoid.NewSanoidProvider(device, interval, logger), zpool.NewZpoolProvider(interval)},
 		interval:  interval,
 		pubs:      pubs,
+		logger:    logger.With().Str("mod", "zfs").Logger(),
 	}
 }
 
@@ -60,12 +52,12 @@ func (s ZfsServer) discoverAll(ctx context.Context) {
 	for _, p := range s.providers {
 		entries, err := p.Entries(ctx)
 		if err != nil {
-			Logger.Error().Str("mod", "zfs").Err(err).Msg("")
+			s.logger.Error().Err(err).Msg("")
 			continue
 		}
 		for _, e := range entries {
 			if err := s.publishDiscovery(e); err != nil {
-				Logger.Error().Str("mod", "zfs").Err(err).Msg("")
+				s.logger.Error().Err(err).Msg("")
 			}
 		}
 	}
@@ -75,7 +67,7 @@ func (s ZfsServer) updateAll(ctx context.Context) {
 	for _, p := range s.providers {
 		entries, err := p.Entries(ctx)
 		if err != nil {
-			Logger.Error().Str("mod", "zfs").Err(err).Msg("")
+			s.logger.Error().Err(err).Msg("")
 			continue
 		}
 		for _, e := range entries {
@@ -94,7 +86,7 @@ func (s ZfsServer) Serve(ctx context.Context) {
 			if !ok {
 				continue
 			}
-			Logger.Debug().Str("mod", "zfs").Msg("Discovery")
+			s.logger.Debug().Msg("Discovery")
 			s.discoverAll(ctx)
 			s.updateAll(ctx)
 		case <-ticker.C:

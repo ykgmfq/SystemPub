@@ -18,8 +18,6 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 )
 
-var Logger zerolog.Logger
-
 // Replace invalid characters and convert to lowercase for MQTT compatibility
 func NormalizeStr(input string) string {
 	input = strings.ToLower(input)
@@ -29,12 +27,13 @@ func NormalizeStr(input string) string {
 }
 
 // Returns a MQTT client instance with initialized channels
-func NewMqttclient(server models.MQTT, device models.Device) Mqttclient {
+func NewMqttclient(server models.MQTT, device models.Device, logger zerolog.Logger) Mqttclient {
 	return Mqttclient{
 		Server:        server,
 		Device:        device,
 		Pubs:          make(chan *paho.Publish, 4),
 		ConnListeners: make([]chan bool, 0),
+		logger:        logger.With().Str("mod", "mqtt").Logger(),
 	}
 }
 
@@ -85,15 +84,15 @@ func ProblemPayload(ok bool) []byte {
 }
 
 // Handles client-side errors.
-func clientError(err error) { Logger.Error().Err(err).Msg("client error") }
+func (client Mqttclient) clientError(err error) { client.logger.Error().Err(err).Msg("Client error") }
 
 // Handles server disconnects.
-func serverDis(d *paho.Disconnect) {
+func (client Mqttclient) serverDis(d *paho.Disconnect) {
+	event := client.logger.Info().Uint8("reason code", uint8(d.ReasonCode))
 	if d.Properties != nil {
-		Logger.Info().Str("mod", "mqtt").Msg("server requested disconnect: " + d.Properties.ReasonString)
-	} else {
-		Logger.Info().Str("mod", "mqtt").Msg("server requested disconnect; reason code: " + string(d.ReasonCode))
+		event = event.Str("reason", d.Properties.ReasonString)
 	}
+	event.Msg("Server requested disconnect")
 }
 
 // Notifies all registered listeners about the connection status to Home Assitant.
@@ -106,23 +105,23 @@ func (client Mqttclient) notifyListeners(connected bool) {
 // buildClientConfig constructs the autopaho client configuration with all callbacks.
 func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.ClientConfig {
 	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
-		Logger.Info().Str("mod", "mqtt").Msg("Connected to MQTT server")
+		client.logger.Info().Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
 			Subscriptions: []paho.SubscribeOptions{
 				{Topic: "homeassistant/status", QoS: 1},
 			},
 		}
 		if _, err := cm.Subscribe(context.Background(), sub); err != nil {
-			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to subscribe to homeassistant status")
+			client.logger.Error().Err(err).Msg("Failed to subscribe to homeassistant status")
 		}
-		Logger.Info().Str("mod", "mqtt").Msg("Subscribed to homeassistant status")
+		client.logger.Info().Msg("Subscribed to homeassistant status")
 		client.notifyListeners(true)
 	}
 
 	onpub := func(pr paho.PublishReceived) (bool, error) {
-		Logger.Debug().Str("mod", "mqtt").Interface("msg", &pr.Packet).Msg("Received message")
+		client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
 		if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
-			Logger.Info().Str("mod", "mqtt").Msg("Homeassistant is online")
+			client.logger.Info().Msg("Homeassistant is online")
 			client.notifyListeners(true)
 		}
 		return true, nil
@@ -130,13 +129,14 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 
 	onerr := func(err error) {
 		client.notifyListeners(false)
-		Logger.Error().Err(err).Msg("")
+		client.logger.Error().Err(err).Msg("Connection attempt failed")
 	}
 
 	onpubl := func(p *paho.Publish) {
-		Logger.Debug().Str("mod", "mqtt").Str("topic", p.Topic).Msg("Published message")
+		client.logger.Debug().Str("topic", p.Topic).Msg("Published message")
 	}
 
+	pahoLogger := client.logger.With().Str("lib", "paho").Logger()
 	user := client.Server.User
 	if client.Server.User == "" {
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
@@ -148,14 +148,14 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 		SessionExpiryInterval:         60,
 		OnConnectionUp:                onconn,
 		OnConnectError:                onerr,
-		Errors:                        &Logger,
-		Debug:                         &Logger,
+		Errors:                        &pahoLogger,
+		Debug:                         &pahoLogger,
 		TlsCfg:                        tlsConfig,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
 			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){onpub},
-			OnClientError:      clientError,
-			OnServerDisconnect: serverDis,
+			OnClientError:      client.clientError,
+			OnServerDisconnect: client.serverDis,
 			PublishHook:        onpubl,
 		},
 		ConnectUsername: user,
@@ -167,17 +167,17 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
 	var tlsConfig *tls.Config
 	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
-		Logger.Info().Str("mod", "mqtt").Msg("Using secure connection")
+		client.logger.Info().Msg("Using secure connection")
 		conf, err := getTlsConfig()
 		if err != nil {
-			Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to get TLS config")
+			client.logger.Error().Err(err).Msg("Failed to get TLS config")
 			return nil, err
 		}
 		tlsConfig = conf
 	}
 	cfg := client.buildClientConfig(tlsConfig)
-	Logger.Debug().Str("mod", "mqtt").Str("username", cfg.ConnectUsername).Str("clientID", cfg.ClientConfig.ClientID).Msg("")
-	Logger.Debug().Str("mod", "mqtt").Msg("Starting connection")
+	client.logger.Debug().Str("username", cfg.ConnectUsername).Str("clientID", cfg.ClientConfig.ClientID).Msg("")
+	client.logger.Debug().Msg("Starting connection")
 	return autopaho.NewConnection(ctx, cfg)
 }
 
@@ -193,14 +193,14 @@ func (client Mqttclient) Serve(ctx context.Context) error {
 	for {
 		select {
 		case <-mqttctx.Done():
-			Logger.Info().Str("mod", "mqtt").Msg("Routine stopped")
+			client.logger.Info().Msg("Routine stopped")
 			return nil
 		case pub, ok := <-client.Pubs:
 			if !ok {
 				return errors.New("MQTT work channel closed")
 			}
 			if _, err := connManage.Publish(mqttctx, pub); err != nil {
-				Logger.Error().Str("mod", "mqtt").Err(err).Msg("Failed to publish")
+				client.logger.Error().Err(err).Msg("Failed to publish")
 			}
 		}
 	}

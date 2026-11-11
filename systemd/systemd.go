@@ -15,8 +15,6 @@ import (
 	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
-var Logger zerolog.Logger
-
 // Returns a MqttConfig for the systemd units binary sensor.
 func getUnitConfig(device models.Device, interval time.Duration) models.MqttConfig {
 	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
@@ -41,13 +39,14 @@ func GetDevice(ctx context.Context) (models.Device, error) {
 }
 
 // Returns a new DbusClient instance with initialized channels and configuration.
-func NewDbusclient(pubs chan *paho.Publish, device models.Device, interval time.Duration) DbusClient {
+func NewDbusclient(pubs chan *paho.Publish, device models.Device, interval time.Duration, logger zerolog.Logger) DbusClient {
 	return DbusClient{
 		Pubs:     pubs,
 		Interval: interval,
 		Config:   getUnitConfig(device, interval),
 		Discover: make(chan bool),
 		Conn:     make(chan bool),
+		logger:   logger.With().Str("mod", "systemd").Logger(),
 	}
 }
 
@@ -59,7 +58,7 @@ func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, err
 	}
 	failedUnits := make([]string, 0, len(states))
 	for _, state := range states {
-		Logger.Warn().Str("mod", "systemd").Str("failed unit", state.Name).Msg("")
+		client.logger.Warn().Str("unit", state.Name).Msg("Failed unit")
 		failedUnits = append(failedUnits, state.Name)
 	}
 	ok := len(failedUnits) == 0
@@ -69,7 +68,7 @@ func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, err
 	}
 	client.Pubs <- &paho.Publish{Payload: mqttclient.ProblemPayload(ok), Topic: client.Config.StateTopic, Retain: true}
 	client.Pubs <- &paho.Publish{Payload: attrs, Topic: client.Config.JsonAttributesTopic, Retain: true}
-	Logger.Debug().Str("mod", "systemd").Msg("Updated sensors")
+	client.logger.Debug().Msg("Updated sensors")
 	return ok, nil
 }
 
@@ -78,7 +77,7 @@ func (client DbusClient) Serve(ctx context.Context) {
 	dbusctx, cancel := context.WithCancel(ctx)
 	conn, err := dbus.NewWithContext(dbusctx)
 	if err != nil {
-		Logger.Fatal().Str("mod", "systemd").Err(err).Msg("")
+		client.logger.Fatal().Err(err).Msg("")
 		client.Conn <- false
 		cancel()
 		return
@@ -89,18 +88,18 @@ func (client DbusClient) Serve(ctx context.Context) {
 		ok, err := client.update(ctx, conn)
 		switch {
 		case err != nil:
-			Logger.Error().Str("mod", "systemd").Err(err).Msg("")
+			client.logger.Error().Err(err).Msg("")
 			return
 		case !ok && healthy:
 			healthy = false
 			updateTimer.Stop()
 			updateTimer = time.NewTicker(time.Minute)
-			Logger.Info().Str("mod", "systemd").Msg("Transitioned to unhealthy state")
+			client.logger.Info().Msg("Transitioned to unhealthy state")
 		case ok && !healthy:
 			healthy = true
 			updateTimer.Stop()
 			updateTimer = time.NewTicker(client.Interval)
-			Logger.Info().Str("mod", "systemd").Msg("Transitioned to healthy state")
+			client.logger.Info().Msg("Transitioned to healthy state")
 		}
 	}
 	for {
@@ -114,11 +113,11 @@ func (client DbusClient) Serve(ctx context.Context) {
 			}
 			discovery, err := mqttclient.GetDiscovery(client.Config)
 			if err != nil {
-				Logger.Error().Str("mod", "systemd").Err(err).Msg("")
+				client.logger.Error().Err(err).Msg("")
 			} else {
 				client.Pubs <- discovery
 			}
-			Logger.Debug().Str("mod", "systemd").Msg("Discovery")
+			client.logger.Debug().Msg("Discovery")
 			up()
 		case <-updateTimer.C:
 			up()
