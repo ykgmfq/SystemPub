@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
@@ -70,6 +72,103 @@ func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig,
 	return config, nil
 }
 
+// Returns the configuration with the password from the credentials directory, which takes precedence over the configuration file.
+func withPassword(config models.SystemPubConfig, logger zerolog.Logger) (models.SystemPubConfig, error) {
+	password, err := loadMQTTPassword()
+	if err != nil {
+		return config, fmt.Errorf("could not read password from credentials directory: %w", err)
+	}
+	if password == "" {
+		return config, nil
+	}
+	if config.MQTTServer.Password != "" {
+		logger.Warn().Msg("Overriding MQTT password from configuration file with credentials directory")
+	}
+	config.MQTTServer.Password = password
+	return config, nil
+}
+
+// Returns the configuration with the server host given on the command line, if any.
+func withHost(config models.SystemPubConfig, host string) (models.SystemPubConfig, error) {
+	if host == "" {
+		return config, nil
+	}
+	parsedURL, err := models.ParseServerURL(host)
+	if err != nil {
+		return config, fmt.Errorf("malformed MQTT server URL: %w", err)
+	}
+	config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
+	return config, nil
+}
+
+// Assembles the configuration from the configuration file, the credentials directory and the command line.
+func loadConfig(configPath, host string, debug bool, logger zerolog.Logger) (models.SystemPubConfig, error) {
+	config := models.SystemPubConfigDefault()
+	if configPath != "" {
+		conf, err := readConfig(configPath, logger)
+		if err != nil {
+			return config, fmt.Errorf("could not read configuration file: %w", err)
+		}
+		config = conf
+	}
+	config, err := withPassword(config, logger)
+	if err != nil {
+		return config, err
+	}
+	if debug {
+		config.Loglevel = zerolog.DebugLevel
+	}
+	return withHost(config, host)
+}
+
+// Returns the providers of the systemd and ZFS sensor groups.
+// Providers that do not work on this host are logged and left out.
+// The returned function releases the resources held by the providers.
+func newProviders(ctx context.Context, dev models.Device, logger, baseLogger zerolog.Logger) (systemdProviders, zfsProviders []provider.Provider, closeAll func()) {
+	closeAll = func() {}
+	units, err := systemd.NewUnitProvider(ctx, dev, systemdInterval, baseLogger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Could not connect to systemd, skipping the units sensor")
+	} else {
+		closeAll = units.Close
+		systemdProviders = append(systemdProviders, units)
+	}
+	snapshots, err := sanoid.NewSanoidProvider(ctx, dev, zfsInterval, baseLogger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Sanoid does not work, skipping the snapshot sensor")
+	} else {
+		zfsProviders = append(zfsProviders, snapshots)
+	}
+	pools, err := zpool.NewZpoolProvider(ctx, zfsInterval)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Zpool does not work, skipping the pool sensors")
+	} else {
+		zfsProviders = append(zfsProviders, pools)
+	}
+	return systemdProviders, zfsProviders, closeAll
+}
+
+// Returns one server per sensor group.
+// Servers without providers are left out, because the MQTT client waits for every connection listener.
+func newServers(pubs chan *paho.Publish, logger zerolog.Logger, systemdProviders, zfsProviders []provider.Provider) []provider.Server {
+	var servers []provider.Server
+	if len(systemdProviders) > 0 {
+		servers = append(servers, provider.NewServer("systemd", pubs, systemdInterval, logger, systemdProviders...))
+	}
+	if len(zfsProviders) > 0 {
+		servers = append(servers, provider.NewServer("zfs", pubs, zfsInterval, logger, zfsProviders...))
+	}
+	return servers
+}
+
+// Returns the systemd status text for the given MQTT connection state.
+func connectionStatus(connected bool) string {
+	if connected {
+		return "STATUS=Connected to MQTT server"
+	}
+	return "STATUS=Disconnected from MQTT server"
+}
+
 // Reports readiness and connection status to systemd and pets the watchdog when one is configured.
 // It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
 func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
@@ -91,13 +190,7 @@ func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
 		case connected := <-conn:
-			var status string
-			if connected {
-				status = "Connected to MQTT server"
-			} else {
-				status = "Disconnected from MQTT server"
-			}
-			daemon.SdNotify(false, "STATUS="+status)
+			daemon.SdNotify(false, connectionStatus(connected))
 		case <-ticks:
 			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 		}
@@ -105,7 +198,6 @@ func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 }
 
 func main() {
-	// Flags and config
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")
 	mqttServerHost := flag.String("host", "", "MQTT server host")
@@ -125,37 +217,9 @@ func main() {
 	baseLogger := zerolog.New(os.Stdout).Level(startLevel)
 	logger := baseLogger.With().Str("mod", "main").Logger()
 
-	// Configuration
-	config := models.SystemPubConfigDefault()
-	if *configPath != "" {
-		conf, err := readConfig(*configPath, logger)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("Could not read configuration file")
-		}
-		config = conf
-	}
-
-	// Load MQTT password from credentials directory if available
-	password, err := loadMQTTPassword()
+	config, err := loadConfig(*configPath, *mqttServerHost, *debug, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not read password from credentials directory")
-	}
-	if password != "" {
-		if config.MQTTServer.Password != "" {
-			logger.Warn().Msg("Overriding MQTT password from configuration file with credentials directory")
-		}
-		config.MQTTServer.Password = password
-	}
-
-	if *debug {
-		config.Loglevel = zerolog.DebugLevel
-	}
-	if *mqttServerHost != "" {
-		parsedURL, err := models.ParseServerURL(*mqttServerHost)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("Malformed MQTT server URL")
-		}
-		config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
+		logger.Fatal().Err(err).Msg("Invalid configuration")
 	}
 	baseLogger = baseLogger.Level(config.Loglevel)
 	logger = logger.Level(config.Loglevel)
@@ -168,40 +232,15 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not get device info")
 	}
-	var systemdProviders, zfsProviders []provider.Provider
-	units, err := systemd.NewUnitProvider(ctx, dev, systemdInterval, baseLogger)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Could not connect to systemd, skipping the units sensor")
-	} else {
-		defer units.Close()
-		systemdProviders = append(systemdProviders, units)
-	}
-	snapshots, err := sanoid.NewSanoidProvider(ctx, dev, zfsInterval, baseLogger)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Sanoid does not work, skipping the snapshot sensor")
-	} else {
-		zfsProviders = append(zfsProviders, snapshots)
-	}
-	pools, err := zpool.NewZpoolProvider(ctx, zfsInterval)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Zpool does not work, skipping the pool sensors")
-	} else {
-		zfsProviders = append(zfsProviders, pools)
-	}
+	systemdProviders, zfsProviders, closeProviders := newProviders(ctx, dev, logger, baseLogger)
+	defer closeProviders()
 
-	wdconn := make(chan bool)
 	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
-	// Servers without providers are left out, because the MQTT client waits for every connection listener.
-	var servers []provider.Server
-	if len(systemdProviders) > 0 {
-		servers = append(servers, provider.NewServer("systemd", mqttClient.Pubs, systemdInterval, baseLogger, systemdProviders...))
-	}
-	if len(zfsProviders) > 0 {
-		servers = append(servers, provider.NewServer("zfs", mqttClient.Pubs, zfsInterval, baseLogger, zfsProviders...))
-	}
+	servers := newServers(mqttClient.Pubs, baseLogger, systemdProviders, zfsProviders)
 	if len(servers) == 0 {
 		logger.Fatal().Msg("No sensors available")
 	}
+	wdconn := make(chan bool)
 	for _, server := range servers {
 		mqttClient.ConnListeners = append(mqttClient.ConnListeners, server.Discover)
 	}

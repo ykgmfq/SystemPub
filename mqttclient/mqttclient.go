@@ -109,67 +109,80 @@ func (client Mqttclient) notifyListeners(connected bool) {
 	}
 }
 
-// buildClientConfig constructs the autopaho client configuration with all callbacks.
-func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.ClientConfig {
-	onconn := func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
-		client.logger.Info().Msg("Connected to MQTT server")
-		sub := &paho.Subscribe{
-			Subscriptions: []paho.SubscribeOptions{
-				{Topic: statusTopic, QoS: 1},
-			},
-		}
-		if _, err := cm.Subscribe(context.Background(), sub); err != nil {
-			client.logger.Error().Err(err).Msg("Failed to subscribe to homeassistant status")
-		}
-		client.logger.Info().Msg("Subscribed to homeassistant status")
+// Subscribes to the Home Assistant status topic whenever the connection comes up, so that discovery can be repeated after Home Assistant restarts.
+func (client Mqttclient) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+	client.logger.Info().Msg("Connected to MQTT server")
+	sub := &paho.Subscribe{
+		Subscriptions: []paho.SubscribeOptions{
+			{Topic: statusTopic, QoS: 1},
+		},
+	}
+	if _, err := cm.Subscribe(context.Background(), sub); err != nil {
+		client.logger.Error().Err(err).Msg("Failed to subscribe to homeassistant status")
+	}
+	client.logger.Info().Msg("Subscribed to homeassistant status")
+	client.notifyListeners(true)
+}
+
+// Treats Home Assistant coming online like a new connection, so that it receives discovery again.
+func (client Mqttclient) onPublishReceived(pr paho.PublishReceived) (bool, error) {
+	client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
+	if pr.Packet.Topic == statusTopic && string(pr.Packet.Payload) == "online" {
+		client.logger.Info().Msg("Homeassistant is online")
 		client.notifyListeners(true)
 	}
+	return true, nil
+}
 
-	onpub := func(pr paho.PublishReceived) (bool, error) {
-		client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
-		if pr.Packet.Topic == statusTopic && string(pr.Packet.Payload) == "online" {
-			client.logger.Info().Msg("Homeassistant is online")
-			client.notifyListeners(true)
-		}
-		return true, nil
+// Handles failed connection attempts.
+func (client Mqttclient) onConnectError(err error) {
+	client.notifyListeners(false)
+	client.logger.Error().Err(err).Msg("Connection attempt failed")
+}
+
+// Logs every outgoing message.
+func (client Mqttclient) onPublished(p *paho.Publish) {
+	client.logger.Debug().Str("topic", p.Topic).Msg("Published message")
+}
+
+// Returns the configured user name, or one derived from the device name.
+func username(server models.MQTT, device models.Device) string {
+	if server.User != "" {
+		return server.User
 	}
+	return fmt.Sprintf("systemPub@%s", device.Name)
+}
 
-	onerr := func(err error) {
-		client.notifyListeners(false)
-		client.logger.Error().Err(err).Msg("Connection attempt failed")
-	}
+// Returns a client ID that is unique per host.
+func clientID(device models.Device) string {
+	return fmt.Sprintf("systemPub@%s_%s", device.Name, device.Identifiers[0][:4])
+}
 
-	onpubl := func(p *paho.Publish) {
-		client.logger.Debug().Str("topic", p.Topic).Msg("Published message")
-	}
-
+// buildClientConfig constructs the autopaho client configuration with all callbacks.
+func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.ClientConfig {
 	// The library reports errors and debug output on separate streams, which are mapped to the matching log levels.
 	pahoLogger := client.logger.With().Str("lib", "paho").Logger()
 	pahoErrors := levelLogger{logger: pahoLogger, level: zerolog.ErrorLevel}
 	pahoDebug := levelLogger{logger: pahoLogger, level: zerolog.DebugLevel}
-	user := client.Server.User
-	if client.Server.User == "" {
-		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
-	}
 	return autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{client.Server.Host.URL},
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
-		OnConnectionUp:                onconn,
-		OnConnectError:                onerr,
+		OnConnectionUp:                client.onConnectionUp,
+		OnConnectError:                client.onConnectError,
 		Errors:                        pahoErrors,
 		Debug:                         pahoDebug,
 		PahoErrors:                    pahoErrors,
 		TlsCfg:                        tlsConfig,
 		ClientConfig: paho.ClientConfig{
-			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
-			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){onpub},
+			ClientID:           clientID(client.Device),
+			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){client.onPublishReceived},
 			OnClientError:      client.clientError,
 			OnServerDisconnect: client.serverDis,
-			PublishHook:        onpubl,
+			PublishHook:        client.onPublished,
 		},
-		ConnectUsername: user,
+		ConnectUsername: username(client.Server, client.Device),
 		ConnectPassword: []byte(client.Server.Password),
 	}
 }

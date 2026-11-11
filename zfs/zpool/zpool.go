@@ -60,25 +60,46 @@ func zpoolDevice(pool *zpoolPool) models.Device {
 	}
 }
 
-func makeSensorConfig(name, uid string, domain models.Domain, deviceClass, stateClass, unit string, device models.Device, interval time.Duration) models.MqttConfig {
-	cfg := models.MqttConfig{
+// Returns the config fields shared by every sensor of the pool.
+func (s poolSensors) config(name, suffix string, domain models.Domain) models.MqttConfig {
+	uid := zpoolSensorUID(s.guid, suffix)
+	return models.MqttConfig{
 		Name:        name,
 		StateTopic:  mqttclient.StateTopic(domain, uid),
 		UniqueID:    uid,
-		Device:      device,
-		ExpireAfter: int((interval * 2).Seconds()),
+		Device:      s.device,
+		ExpireAfter: int((s.interval * 2).Seconds()),
 		ForceUpdate: true,
 	}
-	if deviceClass != "" {
-		cfg.DeviceClass = deviceClass
+}
+
+// Returns a health binary sensor, which reports a problem unless the state is ONLINE.
+func (s poolSensors) health(name, suffix, state string, attrs map[string]any) (models.Entry, error) {
+	raw, err := json.Marshal(attrs)
+	if err != nil {
+		return models.Entry{}, err
 	}
-	if stateClass != "" {
-		cfg.StateClass = stateClass
-	}
-	if unit != "" {
-		cfg.UnitOfMeasurement = unit
-	}
-	return cfg
+	cfg := s.config(name, suffix, models.BinarySensor)
+	cfg.DeviceClass = "problem"
+	cfg.JsonAttributesTopic = mqttclient.AttributesTopic(models.BinarySensor, cfg.UniqueID)
+	ok := state == "ONLINE"
+	return models.Entry{Config: cfg, Domain: models.BinarySensor, Payload: mqttclient.ProblemPayload(ok), Attributes: raw, Problem: !ok}, nil
+}
+
+// Returns a sensor that reports a size in GiB.
+func (s poolSensors) size(name, suffix string, bytes int64) models.Entry {
+	cfg := s.config(name, suffix, models.Sensor)
+	cfg.DeviceClass = "data_size"
+	cfg.StateClass = "measurement"
+	cfg.UnitOfMeasurement = "GiB"
+	return models.Entry{Config: cfg, Domain: models.Sensor, Payload: fmt.Appendf(nil, "%.2f", float64(bytes)/gib)}
+}
+
+// Returns a sensor that reports an ever-growing count, such as errors.
+func (s poolSensors) counter(name, suffix string, n int64) models.Entry {
+	cfg := s.config(name, suffix, models.Sensor)
+	cfg.StateClass = "total_increasing"
+	return models.Entry{Config: cfg, Domain: models.Sensor, Payload: []byte(strconv.FormatInt(n, 10))}
 }
 
 // Returns the scrub details shown as attributes of the pool health sensor.
@@ -106,86 +127,50 @@ func diskAttributes(leaf *vdev) map[string]any {
 	return m
 }
 
-// Returns a health binary sensor entry, which reports a problem unless the state is ONLINE.
-func healthEntry(config models.MqttConfig, state string, attrs map[string]any) (models.Entry, error) {
-	raw, err := json.Marshal(attrs)
-	if err != nil {
-		return models.Entry{}, err
-	}
-	ok := state == "ONLINE"
-	return models.Entry{Config: config, Domain: models.BinarySensor, Payload: mqttclient.ProblemPayload(ok), Attributes: raw, Problem: !ok}, nil
-}
-
-// Returns a sensor entry with the given payload.
-func sensorEntry(config models.MqttConfig, payload []byte) models.Entry {
-	return models.Entry{Config: config, Domain: models.Sensor, Payload: payload}
-}
-
-func gibPayload(bytes int64) []byte {
-	return fmt.Appendf(nil, "%.2f", float64(bytes)/gib)
-}
-
-func countPayload(n int64) []byte {
-	return []byte(strconv.FormatInt(n, 10))
-}
-
-// buildPoolEntries constructs all binary_sensor and sensor entries for one pool.
-func buildPoolEntries(pool *zpoolPool, interval time.Duration) ([]models.Entry, error) {
-	device := zpoolDevice(pool)
-	guid := pool.PoolGUID
-	var entries []models.Entry
-
-	healthUID := zpoolSensorUID(guid, "health")
-	healthCfg := makeSensorConfig("Pool health", healthUID, models.BinarySensor, "problem", "", "", device, interval)
-	healthCfg.JsonAttributesTopic = mqttclient.AttributesTopic(models.BinarySensor, healthUID)
-	health, err := healthEntry(healthCfg, pool.State, scrubAttributes(pool.ScanStats))
+// Returns the health sensor and error counters of one disk.
+func diskEntries(s poolSensors, leaf *vdev) ([]models.Entry, error) {
+	key := mqttclient.NormalizeStr(leaf.Name)
+	health, err := s.health(leaf.Name+" health", key+"_health", leaf.State, diskAttributes(leaf))
 	if err != nil {
 		return nil, err
 	}
-	entries = append(entries, health)
+	return []models.Entry{
+		health,
+		s.counter(leaf.Name+" read errors", key+"_read_errors", leaf.ReadErrors),
+		s.counter(leaf.Name+" write errors", key+"_write_errors", leaf.WriteErrors),
+		s.counter(leaf.Name+" checksum errors", key+"_checksum_errors", leaf.ChecksumErrors),
+	}, nil
+}
 
-	// Capacity comes from the root vdev.
-	rootVdev := pool.Vdevs[pool.Name]
-	if rootVdev != nil {
-		entries = append(entries,
-			sensorEntry(makeSensorConfig("Allocated space", zpoolSensorUID(guid, "alloc"), models.Sensor, "data_size", "measurement", "GiB", device, interval), gibPayload(rootVdev.AllocSpace)),
-			sensorEntry(makeSensorConfig("Total space", zpoolSensorUID(guid, "total"), models.Sensor, "data_size", "measurement", "GiB", device, interval), gibPayload(rootVdev.TotalSpace)),
-			sensorEntry(makeSensorConfig("Free space", zpoolSensorUID(guid, "free"), models.Sensor, "data_size", "measurement", "GiB", device, interval), gibPayload(rootVdev.TotalSpace-rootVdev.AllocSpace)),
-		)
+// buildPoolEntries returns the sensors of one pool, followed by the sensors of each of its disks.
+func buildPoolEntries(pool *zpoolPool, interval time.Duration) ([]models.Entry, error) {
+	s := poolSensors{guid: pool.PoolGUID, device: zpoolDevice(pool), interval: interval}
+	health, err := s.health("Pool health", "health", pool.State, scrubAttributes(pool.ScanStats))
+	if err != nil {
+		return nil, err
+	}
+	entries := []models.Entry{
+		health,
+		s.counter("Pool errors", "errors", int64(pool.ErrorCount)),
+		s.counter("Scrub errors", "scrub_errors", int64(pool.ScanStats.Errors)),
 	}
 
-	entries = append(entries,
-		sensorEntry(makeSensorConfig("Pool errors", zpoolSensorUID(guid, "errors"), models.Sensor, "", "total_increasing", "", device, interval), countPayload(int64(pool.ErrorCount))),
-		sensorEntry(makeSensorConfig("Scrub errors", zpoolSensorUID(guid, "scrub_errors"), models.Sensor, "", "total_increasing", "", device, interval), countPayload(int64(pool.ScanStats.Errors))),
-	)
-
-	if rootVdev == nil {
+	// Capacity and disks are both read from the root vdev.
+	root := pool.Vdevs[pool.Name]
+	if root == nil {
 		return entries, nil
 	}
-	for _, leaf := range collectLeafVdevs(rootVdev) {
-		diskKey := mqttclient.NormalizeStr(leaf.Name)
-
-		diskHealthUID := zpoolSensorUID(guid, diskKey+"_health")
-		diskHealthCfg := makeSensorConfig(leaf.Name+" health", diskHealthUID, models.BinarySensor, "problem", "", "", device, interval)
-		diskHealthCfg.JsonAttributesTopic = mqttclient.AttributesTopic(models.BinarySensor, diskHealthUID)
-		diskHealth, err := healthEntry(diskHealthCfg, leaf.State, diskAttributes(leaf))
+	entries = append(entries,
+		s.size("Allocated space", "alloc", root.AllocSpace),
+		s.size("Total space", "total", root.TotalSpace),
+		s.size("Free space", "free", root.TotalSpace-root.AllocSpace),
+	)
+	for _, leaf := range collectLeafVdevs(root) {
+		disk, err := diskEntries(s, leaf)
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, diskHealth)
-
-		for _, s := range []struct {
-			suffix string
-			name   string
-			val    int64
-		}{
-			{diskKey + "_read_errors", leaf.Name + " read errors", leaf.ReadErrors},
-			{diskKey + "_write_errors", leaf.Name + " write errors", leaf.WriteErrors},
-			{diskKey + "_checksum_errors", leaf.Name + " checksum errors", leaf.ChecksumErrors},
-		} {
-			uid := zpoolSensorUID(guid, s.suffix)
-			entries = append(entries, sensorEntry(makeSensorConfig(s.name, uid, models.Sensor, "", "total_increasing", "", device, interval), countPayload(s.val)))
-		}
+		entries = append(entries, disk...)
 	}
 	return entries, nil
 }

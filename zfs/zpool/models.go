@@ -3,6 +3,8 @@ package zpool
 import (
 	"context"
 	"time"
+
+	"github.com/ykgmfq/SystemPub/models"
 )
 
 type zpoolExecutor interface {
@@ -46,6 +48,13 @@ type zpoolPool struct {
 
 type zpoolStatus struct {
 	Pools map[string]*zpoolPool `json:"pools"`
+}
+
+// poolSensors builds the sensors of one pool, which all share the same device and expiry.
+type poolSensors struct {
+	guid     uint64
+	device   models.Device
+	interval time.Duration
 }
 
 // ZpoolProvider runs `zpool status` and publishes per-pool and per-disk MQTT sensors.
