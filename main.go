@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"io/fs"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -144,11 +143,11 @@ func main() {
 		config.Loglevel = zerolog.DebugLevel
 	}
 	if *mqttServerHost != "" {
-		if parsedURL, err := url.Parse(*mqttServerHost); err == nil {
-			config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
-		} else {
-			logger.Error().Err(err).Msg("Malformed MQTT server URL")
+		parsedURL, err := models.ParseServerURL(*mqttServerHost)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("Malformed MQTT server URL")
 		}
+		config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
 	}
 	baseLogger = baseLogger.Level(config.Loglevel)
 	logger = logger.Level(config.Loglevel)

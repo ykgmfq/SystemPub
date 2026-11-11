@@ -14,7 +14,7 @@ type YAMLURL struct {
 }
 
 func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
-	parsed, err := url.Parse(value.Value)
+	parsed, err := ParseServerURL(value.Value)
 	if err != nil {
 		return err
 	}

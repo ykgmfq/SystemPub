@@ -57,9 +57,10 @@ func TestGetPoolStatePoolProblem(t *testing.T) {
 		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
 			return &MockCommandExecutor{err: sanoidErr}
 		}
-		result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+		result, state, _, err := getPoolState(context.Background(), mockRun, models.Health)
 		assert.NoError(t, err, "Expected no error on exit codes 1-4")
 		assert.False(t, result, "Expected pool state to be false on exit codes 1-4")
+		assert.NotEmpty(t, state, "Expected a state name for exit code %d", exitcode)
 	}
 }
 
