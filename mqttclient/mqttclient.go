@@ -3,7 +3,6 @@ package mqttclient
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,16 +30,6 @@ func NewMqttclient(server models.MQTT, device models.Device, logger zerolog.Logg
 		ConnListeners: make([]chan bool, 0),
 		logger:        logger.With().Str("mod", "mqtt").Logger(),
 	}
-}
-
-// getTlsConfig returns a TLS configuration that trusts the system certificate authorities.
-func getTlsConfig() (*tls.Config, error) {
-	rootCAPool, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-	var tlsConfig = tls.Config{RootCAs: rootCAPool}
-	return &tlsConfig, nil
 }
 
 // sensorTopic returns the topic below which Home Assistant expects all messages for the given sensor.
@@ -171,7 +160,7 @@ func clientID(device models.Device) string {
 
 // buildClientConfig returns the autopaho configuration with all callbacks.
 // The callbacks run under the given context, so that they stop together with the connection.
-func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.Config) autopaho.ClientConfig {
+func (client Mqttclient) buildClientConfig(ctx context.Context) autopaho.ClientConfig {
 	// The library reports errors and debug output on separate streams, which are mapped to the matching log levels.
 	pahoLogger := client.logger.With().Str("lib", "paho").Logger()
 	pahoErrors := levelLogger{logger: pahoLogger, level: zerolog.ErrorLevel}
@@ -188,7 +177,7 @@ func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.C
 		Errors:         pahoErrors,
 		Debug:          pahoDebug,
 		PahoErrors:     pahoErrors,
-		TlsCfg:         tlsConfig,
+		TlsCfg:         &tls.Config{},
 		ClientConfig: paho.ClientConfig{
 			ClientID: clientID(client.Device),
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
@@ -203,19 +192,9 @@ func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.C
 	}
 }
 
-// createConnection opens the connection to the MQTT server, using TLS for the secure schemes.
+// createConnection opens the connection to the MQTT server.
 func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
-	var tlsConfig *tls.Config
-	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
-		client.logger.Info().Msg("Using secure connection")
-		conf, err := getTlsConfig()
-		if err != nil {
-			client.logger.Error().Err(err).Msg("Failed to get TLS config")
-			return nil, err
-		}
-		tlsConfig = conf
-	}
-	cfg := client.buildClientConfig(ctx, tlsConfig)
+	cfg := client.buildClientConfig(ctx)
 	client.logger.Debug().Str("username", cfg.ConnectUsername).Str("clientID", cfg.ClientConfig.ClientID).Msg("")
 	client.logger.Debug().Msg("Starting connection")
 	return autopaho.NewConnection(ctx, cfg)
