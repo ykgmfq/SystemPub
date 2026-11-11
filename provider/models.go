@@ -12,6 +12,9 @@ import (
 // While any sensor reports a problem, the server checks this often, so that a recovery shows up quickly.
 const problemInterval = time.Minute
 
+// Upper bound for a single provider to deliver its entries, so that one hanging provider cannot stall the whole group.
+const entriesTimeout = 30 * time.Second
+
 // Provider delivers sensor entries for discovery and state updates.
 type Provider interface {
 	Entries(context.Context) ([]models.Entry, error)

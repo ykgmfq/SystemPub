@@ -103,40 +103,48 @@ func (client Mqttclient) serverDis(d *paho.Disconnect) {
 }
 
 // Notifies all registered listeners about the connection status to Home Assitant.
-func (client Mqttclient) notifyListeners(connected bool) {
+// It gives up once the context ends, because listeners stop receiving at shutdown.
+func (client Mqttclient) notifyListeners(ctx context.Context, connected bool) {
 	for _, listener := range client.ConnListeners {
-		listener <- connected
+		select {
+		case listener <- connected:
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
 // Subscribes to the Home Assistant status topic whenever the connection comes up, so that discovery can be repeated after Home Assistant restarts.
-func (client Mqttclient) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+func (client Mqttclient) onConnectionUp(ctx context.Context, cm *autopaho.ConnectionManager) {
 	client.logger.Info().Msg("Connected to MQTT server")
 	sub := &paho.Subscribe{
 		Subscriptions: []paho.SubscribeOptions{
 			{Topic: statusTopic, QoS: 1},
 		},
 	}
-	if _, err := cm.Subscribe(context.Background(), sub); err != nil {
+	subCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	if _, err := cm.Subscribe(subCtx, sub); err != nil {
 		client.logger.Error().Err(err).Msg("Failed to subscribe to homeassistant status")
+	} else {
+		client.logger.Info().Msg("Subscribed to homeassistant status")
 	}
-	client.logger.Info().Msg("Subscribed to homeassistant status")
-	client.notifyListeners(true)
+	client.notifyListeners(ctx, true)
 }
 
 // Treats Home Assistant coming online like a new connection, so that it receives discovery again.
-func (client Mqttclient) onPublishReceived(pr paho.PublishReceived) (bool, error) {
+func (client Mqttclient) onPublishReceived(ctx context.Context, pr paho.PublishReceived) (bool, error) {
 	client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
 	if pr.Packet.Topic == statusTopic && string(pr.Packet.Payload) == "online" {
 		client.logger.Info().Msg("Homeassistant is online")
-		client.notifyListeners(true)
+		client.notifyListeners(ctx, true)
 	}
 	return true, nil
 }
 
 // Handles failed connection attempts.
-func (client Mqttclient) onConnectError(err error) {
-	client.notifyListeners(false)
+func (client Mqttclient) onConnectError(ctx context.Context, err error) {
+	client.notifyListeners(ctx, false)
 	client.logger.Error().Err(err).Msg("Connection attempt failed")
 }
 
@@ -159,7 +167,8 @@ func clientID(device models.Device) string {
 }
 
 // buildClientConfig constructs the autopaho client configuration with all callbacks.
-func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.ClientConfig {
+// The callbacks run under the given context, so that they stop together with the connection.
+func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.Config) autopaho.ClientConfig {
 	// The library reports errors and debug output on separate streams, which are mapped to the matching log levels.
 	pahoLogger := client.logger.With().Str("lib", "paho").Logger()
 	pahoErrors := levelLogger{logger: pahoLogger, level: zerolog.ErrorLevel}
@@ -169,15 +178,19 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 		KeepAlive:                     20,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         60,
-		OnConnectionUp:                client.onConnectionUp,
-		OnConnectError:                client.onConnectError,
-		Errors:                        pahoErrors,
-		Debug:                         pahoDebug,
-		PahoErrors:                    pahoErrors,
-		TlsCfg:                        tlsConfig,
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+			client.onConnectionUp(ctx, cm)
+		},
+		OnConnectError: func(err error) { client.onConnectError(ctx, err) },
+		Errors:         pahoErrors,
+		Debug:          pahoDebug,
+		PahoErrors:     pahoErrors,
+		TlsCfg:         tlsConfig,
 		ClientConfig: paho.ClientConfig{
-			ClientID:           clientID(client.Device),
-			OnPublishReceived:  []func(paho.PublishReceived) (bool, error){client.onPublishReceived},
+			ClientID: clientID(client.Device),
+			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
+				func(pr paho.PublishReceived) (bool, error) { return client.onPublishReceived(ctx, pr) },
+			},
 			OnClientError:      client.clientError,
 			OnServerDisconnect: client.serverDis,
 			PublishHook:        client.onPublished,
@@ -199,7 +212,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 		}
 		tlsConfig = conf
 	}
-	cfg := client.buildClientConfig(tlsConfig)
+	cfg := client.buildClientConfig(ctx, tlsConfig)
 	client.logger.Debug().Str("username", cfg.ConnectUsername).Str("clientID", cfg.ClientConfig.ClientID).Msg("")
 	client.logger.Debug().Msg("Starting connection")
 	return autopaho.NewConnection(ctx, cfg)
@@ -223,9 +236,17 @@ func (client Mqttclient) Serve(ctx context.Context) error {
 			if !ok {
 				return errors.New("MQTT work channel closed")
 			}
-			if _, err := connManage.Publish(mqttctx, pub); err != nil {
+			if err := publish(mqttctx, connManage, pub); err != nil {
 				client.logger.Error().Err(err).Msg("Failed to publish")
 			}
 		}
 	}
+}
+
+// Publishes one message, bounded by its own deadline so that a stalled acknowledgement does not hold up the queue.
+func publish(ctx context.Context, cm *autopaho.ConnectionManager, pub *paho.Publish) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	_, err := cm.Publish(ctx, pub)
+	return err
 }
