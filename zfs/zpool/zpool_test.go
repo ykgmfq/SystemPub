@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ykgmfq/SystemPub/models"
 )
 
 type mockZpoolCmd struct {
@@ -68,26 +69,26 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus.json"))
 	require.NoError(t, err)
 	pool := status.Pools["data"]
-	entries := buildPoolEntries(pool, 20*time.Minute)
+	entries, err := buildPoolEntries(pool, 20*time.Minute)
+	require.NoError(t, err)
 
-	byUID := map[string]zpoolSensorEntry{}
+	byUID := map[string]models.Entry{}
 	for _, e := range entries {
-		byUID[e.config.UniqueID] = e
+		byUID[e.Config.UniqueID] = e
 	}
 	guid := pool.PoolGUID
 
 	// Pool health binary_sensor
 	health := byUID[zpoolSensorUID(guid, "health")]
-	assert.Equal(t, "binary_sensor", health.domain)
-	assert.Equal(t, "problem", health.config.DeviceClass)
-	assert.NotEmpty(t, health.config.JsonAttributesTopic)
-	assert.Equal(t, []byte("OFF"), health.payload())
-	assert.False(t, health.problem)
+	assert.Equal(t, "binary_sensor", health.Domain)
+	assert.Equal(t, "problem", health.Config.DeviceClass)
+	assert.NotEmpty(t, health.Config.JsonAttributesTopic)
+	assert.Equal(t, []byte("OFF"), health.Payload)
+	assert.False(t, health.Problem)
 
 	// Attributes contain scrub fields and ISO timestamps
 	var attrMap map[string]any
-	attrsData, err := health.attrs()
-	require.NoError(t, err)
+	attrsData := health.Attributes
 	require.NoError(t, json.Unmarshal(attrsData, &attrMap))
 	assert.Contains(t, attrMap, "scrub_state")
 	assert.Contains(t, attrMap, "scrub_start")
@@ -95,23 +96,22 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 
 	// Capacity sensors
 	alloc := byUID[zpoolSensorUID(guid, "alloc")]
-	assert.Equal(t, "sensor", alloc.domain)
-	assert.Equal(t, "data_size", alloc.config.DeviceClass)
-	assert.Equal(t, "GiB", alloc.config.UnitOfMeasurement)
-	assert.Equal(t, "measurement", alloc.config.StateClass)
-	assert.Nil(t, alloc.attrs)
+	assert.Equal(t, "sensor", alloc.Domain)
+	assert.Equal(t, "data_size", alloc.Config.DeviceClass)
+	assert.Equal(t, "GiB", alloc.Config.UnitOfMeasurement)
+	assert.Equal(t, "measurement", alloc.Config.StateClass)
+	assert.Nil(t, alloc.Attributes)
 
 	// Pool error sensor
 	errEntry := byUID[zpoolSensorUID(guid, "errors")]
-	assert.Equal(t, "total_increasing", errEntry.config.StateClass)
-	assert.Equal(t, []byte("0"), errEntry.payload())
+	assert.Equal(t, "total_increasing", errEntry.Config.StateClass)
+	assert.Equal(t, []byte("0"), errEntry.Payload)
 
 	// Disk health with attributes
 	diskHealth := byUID[zpoolSensorUID(guid, "sda_health")]
-	assert.Equal(t, "binary_sensor", diskHealth.domain)
+	assert.Equal(t, "binary_sensor", diskHealth.Domain)
 	var diskAttrMap map[string]any
-	diskAttrsData, err := diskHealth.attrs()
-	require.NoError(t, err)
+	diskAttrsData := diskHealth.Attributes
 	require.NoError(t, json.Unmarshal(diskAttrsData, &diskAttrMap))
 	assert.Contains(t, diskAttrMap, "path")
 	assert.Contains(t, diskAttrMap, "devid")
@@ -122,29 +122,30 @@ func TestBuildPoolEntriesDegraded(t *testing.T) {
 	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus2.json"))
 	require.NoError(t, err)
 	pool := status.Pools["test2"]
-	entries := buildPoolEntries(pool, 20*time.Minute)
-	byUID := map[string]zpoolSensorEntry{}
+	entries, err := buildPoolEntries(pool, 20*time.Minute)
+	require.NoError(t, err)
+	byUID := map[string]models.Entry{}
 	for _, e := range entries {
-		byUID[e.config.UniqueID] = e
+		byUID[e.Config.UniqueID] = e
 	}
 	health := byUID[zpoolSensorUID(pool.PoolGUID, "health")]
-	assert.Equal(t, []byte("ON"), health.payload())
-	assert.True(t, health.problem)
+	assert.Equal(t, []byte("ON"), health.Payload)
+	assert.True(t, health.Problem)
 }
 
 func TestNoScrubTimesWhenZero(t *testing.T) {
 	status, err := runZpool(context.Background(), zpoolFixtureExec(t, "zoolstatus2.json"))
 	require.NoError(t, err)
 	pool := status.Pools["test"] // no scan_stats
-	entries := buildPoolEntries(pool, 20*time.Minute)
-	byUID := map[string]zpoolSensorEntry{}
+	entries, err := buildPoolEntries(pool, 20*time.Minute)
+	require.NoError(t, err)
+	byUID := map[string]models.Entry{}
 	for _, e := range entries {
-		byUID[e.config.UniqueID] = e
+		byUID[e.Config.UniqueID] = e
 	}
 	health := byUID[zpoolSensorUID(pool.PoolGUID, "health")]
 	var attrMap map[string]any
-	attrsData, err := health.attrs()
-	require.NoError(t, err)
+	attrsData := health.Attributes
 	require.NoError(t, json.Unmarshal(attrsData, &attrMap))
 	assert.NotContains(t, attrMap, "scrub_start")
 	assert.NotContains(t, attrMap, "scrub_end")
