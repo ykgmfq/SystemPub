@@ -70,7 +70,7 @@ func TestGetPoolStateSanoidProblem(t *testing.T) {
 			return &MockCommandExecutor{err: testerr}
 		}
 		result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
-		assert.Equal(t, testerr, err, "Expected error to be escalated")
+		assert.ErrorIs(t, err, testerr, "Expected error to be escalated")
 		assert.False(t, result, "Expected pool state to be false on sanoid problem")
 	}
 }
@@ -82,7 +82,7 @@ func TestGetPoolStateKilled(t *testing.T) {
 		return &MockCommandExecutor{err: killedErr}
 	}
 	result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
-	assert.Equal(t, killedErr, err, "Expected killed-process error to be escalated")
+	assert.ErrorIs(t, err, killedErr, "Expected killed-process error to be escalated")
 	assert.False(t, result)
 }
 
@@ -91,7 +91,7 @@ func TestEntriesLogsPoolProblem(t *testing.T) {
 	sanoidErr := makeExitError(2)
 	require.NotNil(t, sanoidErr)
 	var buf bytes.Buffer
-	provider := NewSanoidProvider(models.Device{Name: "test"}, time.Minute, zerolog.New(&buf))
+	provider := newSanoidProvider(models.Device{Name: "test"}, time.Minute, zerolog.New(&buf))
 	provider.shellExec = func(_ context.Context, _ string, _ ...string) commandExecutor {
 		return &MockCommandExecutor{err: sanoidErr}
 	}
@@ -99,4 +99,16 @@ func TestEntriesLogsPoolProblem(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), `"mod":"sanoid"`)
 	assert.Contains(t, buf.String(), `"state":"Critical"`)
+}
+
+// A broken sanoid explains itself on stderr, which must reach the log so the cause is obvious.
+func TestGetPoolStateErrorIncludesStderr(t *testing.T) {
+	_, sanoidErr := exec.Command("sh", "-c", "echo 'could not read config' >&2; exit 255").Output()
+	require.Error(t, sanoidErr)
+	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
+		return &MockCommandExecutor{err: sanoidErr}
+	}
+	_, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+	assert.ErrorIs(t, err, sanoidErr)
+	assert.ErrorContains(t, err, "could not read config")
 }

@@ -168,26 +168,51 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not get device info")
 	}
+	var systemdProviders, zfsProviders []provider.Provider
 	units, err := systemd.NewUnitProvider(ctx, dev, systemdInterval, baseLogger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not connect to systemd")
+		logger.Warn().Err(err).Msg("Could not connect to systemd, skipping the units sensor")
+	} else {
+		defer units.Close()
+		systemdProviders = append(systemdProviders, units)
 	}
-	defer units.Close()
+	pool, err := sanoid.NewSanoidProvider(ctx, dev, zfsInterval, baseLogger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Sanoid does not work, skipping the sanoid sensors")
+	} else {
+		zfsProviders = append(zfsProviders, pool)
+	}
+	pools, err := zpool.NewZpoolProvider(ctx, zfsInterval)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Zpool does not work, skipping the pool sensors")
+	} else {
+		zfsProviders = append(zfsProviders, pools)
+	}
 
 	wdconn := make(chan bool)
 	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
-	systemdServer := provider.NewServer("systemd", mqttClient.Pubs, systemdInterval, baseLogger, units)
-	zfsServer := provider.NewServer("zfs", mqttClient.Pubs, zfsInterval, baseLogger,
-		sanoid.NewSanoidProvider(dev, zfsInterval, baseLogger),
-		zpool.NewZpoolProvider(zfsInterval),
-	)
-	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdServer.Discover, zfsServer.Discover, wdconn)
+	// Servers without providers are left out, because the MQTT client waits for every connection listener.
+	var servers []provider.Server
+	if len(systemdProviders) > 0 {
+		servers = append(servers, provider.NewServer("systemd", mqttClient.Pubs, systemdInterval, baseLogger, systemdProviders...))
+	}
+	if len(zfsProviders) > 0 {
+		servers = append(servers, provider.NewServer("zfs", mqttClient.Pubs, zfsInterval, baseLogger, zfsProviders...))
+	}
+	if len(servers) == 0 {
+		logger.Fatal().Msg("No sensors available")
+	}
+	for _, server := range servers {
+		mqttClient.ConnListeners = append(mqttClient.ConnListeners, server.Discover)
+	}
+	mqttClient.ConnListeners = append(mqttClient.ConnListeners, wdconn)
 
 	// A failed publisher must end the process, so that systemd stops getting watchdog pings and restarts the service.
 	mqttErr := make(chan error, 1)
 	go func() { mqttErr <- mqttClient.Serve(ctx) }()
-	go systemdServer.Serve(ctx)
-	go zfsServer.Serve(ctx)
+	for _, server := range servers {
+		go server.Serve(ctx)
+	}
 	go watchdog(ctx, wdconn, logger)
 
 	select {

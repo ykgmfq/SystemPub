@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -156,10 +157,23 @@ func TestZpoolDeviceIdentifierIsPureGUID(t *testing.T) {
 }
 
 func TestRunZpoolError(t *testing.T) {
-	provider := NewZpoolProvider(20 * time.Minute)
+	provider := newZpoolProvider(20 * time.Minute)
 	provider.execFn = func(_ context.Context, _ string, _ ...string) zpoolExecutor {
 		return &mockZpoolCmd{err: os.ErrNotExist}
 	}
 	_, err := provider.Entries(context.Background())
 	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+// An old zpool without JSON support fails with a usage message, which must reach the log so the cause is obvious.
+func TestRunZpoolErrorIncludesStderr(t *testing.T) {
+	_, exitErr := exec.Command("sh", "-c", "echo \"invalid option 'j'\" >&2; exit 2").Output()
+	require.Error(t, exitErr)
+	provider := newZpoolProvider(20 * time.Minute)
+	provider.execFn = func(_ context.Context, _ string, _ ...string) zpoolExecutor {
+		return &mockZpoolCmd{err: exitErr}
+	}
+	_, err := provider.Entries(context.Background())
+	assert.ErrorIs(t, err, exitErr)
+	assert.ErrorContains(t, err, "invalid option 'j'")
 }

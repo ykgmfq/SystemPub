@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -46,6 +47,9 @@ func getPoolState(ctx context.Context, run func(context.Context, string, ...stri
 	}
 	exitCode := exitError.ExitCode()
 	if exitCode < 0 || exitCode > 4 {
+		if len(exitError.Stderr) > 0 {
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitError.Stderr)))
+		}
 		return false, "", output, err
 	}
 	return false, sanoidState(exitCode), output, nil
@@ -65,7 +69,17 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 }
 
 // NewSanoidProvider returns a provider that runs sanoid to check pool state.
-func NewSanoidProvider(device models.Device, interval time.Duration, logger zerolog.Logger) *SanoidProvider {
+// It runs sanoid once and fails when sanoid itself does not work, so that the caller can carry on without it.
+// Pool problems found by that run do not count as a failure.
+func NewSanoidProvider(ctx context.Context, device models.Device, interval time.Duration, logger zerolog.Logger) (*SanoidProvider, error) {
+	p := newSanoidProvider(device, interval, logger)
+	if _, _, _, err := getPoolState(ctx, p.shellExec, models.Health); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func newSanoidProvider(device models.Device, interval time.Duration, logger zerolog.Logger) *SanoidProvider {
 	return &SanoidProvider{
 		configs: GetPoolConfigs(device, interval),
 		shellExec: func(ctx context.Context, name string, arg ...string) commandExecutor {
