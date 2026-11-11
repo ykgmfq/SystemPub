@@ -8,6 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Schemes accepted for the MQTT server address.
+// The client enables TLS for the secure ones, so other aliases the MQTT library knows are left out.
+var serverSchemes = []string{"mqtt", "mqtts", "ws", "wss"}
+
 // Custom URL type to handle YAML decoding
 type YAMLURL struct {
 	*url.URL
