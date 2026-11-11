@@ -3,7 +3,9 @@ set -eu
 
 # Builds a self-contained source tarball with vendored Go dependencies.
 # COPR and Launchpad build without network access, so the tarball must
-# carry everything. Prints the path of the tarball on the last line.
+# carry everything. The file follows the Debian naming scheme, which
+# dpkg-source requires and rpmbuild does not care about.
+# Prints the path of the tarball on the last line.
 
 ver=${TAG#v}
 workdir=$(mktemp -d)
@@ -14,5 +16,6 @@ git archive HEAD | tar -x -C "$srcdir"
 pushd "$srcdir" > /dev/null
 go mod vendor
 popd > /dev/null
-tar -cJf "$workdir/systempub-$ver.tar.xz" -C "$workdir" "systempub-$ver"
-echo "$workdir/systempub-$ver.tar.xz"
+tarball="$workdir/systempub_$ver.orig.tar.xz"
+tar -cJf "$tarball" -C "$workdir" "systempub-$ver"
+echo "$tarball"

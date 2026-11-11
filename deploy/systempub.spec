@@ -9,7 +9,7 @@ Release:        1%{?dist}
 Summary:        Publish ZFS pool and systemd unit state to MQTT for Home Assistant
 License:        GPL-3.0-only
 URL:            https://github.com/ykgmfq/SystemPub
-Source0:        %{name}-%{version}.tar.xz
+Source0:        %{name}_%{version}.orig.tar.xz
 
 BuildRequires:  golang >= 1.26
 BuildRequires:  systemd-rpm-macros
@@ -50,7 +50,3 @@ install -Dpm 0644 deploy/85-systempub.preset %{buildroot}%{_presetdir}/85-system
 %{_bindir}/systempub
 %{_unitdir}/systempub.service
 %{_presetdir}/85-systempub.preset
-
-%changelog
-* Thu Jun 11 2026 Dennis M. Pöpperl <accounts@dm-poepperl.de> - 1.4.0-1
-- Switch distribution from systemd-sysext images to an RPM built on COPR

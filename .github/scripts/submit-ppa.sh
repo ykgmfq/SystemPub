@@ -25,9 +25,6 @@ tarball=$(bash .github/scripts/build-tarball.sh | tail -1)
 workdir=$(dirname "$tarball")
 srcdir="$workdir/systempub-$ver"
 
-# dpkg-source expects the upstream tarball under the Debian naming scheme.
-mv "$tarball" "$workdir/systempub_$ver.orig.tar.xz"
-
 # The changelog is generated here so the version stays tag-driven,
 # like the spec used for the RPM.
 cp -r deploy/debian "$srcdir/debian"
