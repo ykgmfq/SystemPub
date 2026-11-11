@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
@@ -38,89 +37,54 @@ func GetDevice(ctx context.Context) (models.Device, error) {
 	return models.Device{Name: status.Hostname, SWversion: status.OperatingSystemPrettyName, Identifiers: [1]string{status.MachineID}, Manufacturer: status.HardwareVendor, Model: status.HardwareModel}, nil
 }
 
-// Returns a new DbusClient instance with initialized channels and configuration.
-func NewDbusclient(pubs chan *paho.Publish, device models.Device, interval time.Duration, logger zerolog.Logger) DbusClient {
-	return DbusClient{
-		Pubs:     pubs,
-		Interval: interval,
-		Config:   getUnitConfig(device, interval),
-		Discover: make(chan bool),
-		Conn:     make(chan bool),
-		logger:   logger.With().Str("mod", "systemd").Logger(),
+// NewUnitProvider connects to systemd over D-Bus and returns a provider for the units sensor.
+func NewUnitProvider(ctx context.Context, device models.Device, interval time.Duration, logger zerolog.Logger) (*UnitProvider, error) {
+	conn, err := dbus.NewWithContext(ctx)
+	if err != nil {
+		return nil, err
 	}
+	return &UnitProvider{
+		conn:   conn,
+		config: getUnitConfig(device, interval),
+		logger: logger.With().Str("mod", "systemd").Logger(),
+	}, nil
 }
 
-// Queries the systemd D-Bus for failed units and publishes the state to MQTT.
-func (client DbusClient) update(ctx context.Context, conn *dbus.Conn) (bool, error) {
-	states, err := conn.ListUnitsByPatternsContext(ctx, []string{"failed"}, []string{"*"})
+// Close ends the D-Bus connection.
+func (p *UnitProvider) Close() {
+	p.conn.Close()
+}
+
+// Returns the sensor entry for the given list of failed units.
+func unitEntry(config models.MqttConfig, failedUnits []string) (models.Entry, error) {
+	attrs, err := json.Marshal(map[string][]string{"failed_units": failedUnits})
 	if err != nil {
-		return false, err
+		return models.Entry{}, err
+	}
+	ok := len(failedUnits) == 0
+	return models.Entry{
+		Config:     config,
+		Domain:     "binary_sensor",
+		Payload:    mqttclient.ProblemPayload(ok),
+		Attributes: attrs,
+		Problem:    !ok,
+	}, nil
+}
+
+// Entries queries systemd for failed units and returns the units sensor.
+func (p *UnitProvider) Entries(ctx context.Context) ([]models.Entry, error) {
+	states, err := p.conn.ListUnitsByPatternsContext(ctx, []string{"failed"}, []string{"*"})
+	if err != nil {
+		return nil, err
 	}
 	failedUnits := make([]string, 0, len(states))
 	for _, state := range states {
-		client.logger.Warn().Str("unit", state.Name).Msg("Failed unit")
+		p.logger.Warn().Str("unit", state.Name).Msg("Failed unit")
 		failedUnits = append(failedUnits, state.Name)
 	}
-	ok := len(failedUnits) == 0
-	attrs, err := json.Marshal(map[string][]string{"failed_units": failedUnits})
+	entry, err := unitEntry(p.config, failedUnits)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	client.Pubs <- &paho.Publish{Payload: mqttclient.ProblemPayload(ok), Topic: client.Config.StateTopic, Retain: true}
-	client.Pubs <- &paho.Publish{Payload: attrs, Topic: client.Config.JsonAttributesTopic, Retain: true}
-	client.logger.Debug().Msg("Updated sensors")
-	return ok, nil
-}
-
-// Long-running routine that handles the D-Bus connection and publishes messages.
-func (client DbusClient) Serve(ctx context.Context) {
-	dbusctx, cancel := context.WithCancel(ctx)
-	conn, err := dbus.NewWithContext(dbusctx)
-	if err != nil {
-		client.logger.Fatal().Err(err).Msg("")
-		client.Conn <- false
-		cancel()
-		return
-	}
-	healthy := false
-	updateTimer := time.NewTicker(time.Minute)
-	up := func() {
-		ok, err := client.update(ctx, conn)
-		switch {
-		case err != nil:
-			client.logger.Error().Err(err).Msg("")
-			return
-		case !ok && healthy:
-			healthy = false
-			updateTimer.Stop()
-			updateTimer = time.NewTicker(time.Minute)
-			client.logger.Info().Msg("Transitioned to unhealthy state")
-		case ok && !healthy:
-			healthy = true
-			updateTimer.Stop()
-			updateTimer = time.NewTicker(client.Interval)
-			client.logger.Info().Msg("Transitioned to healthy state")
-		}
-	}
-	for {
-		select {
-		case <-dbusctx.Done():
-			cancel()
-			return
-		case ok := <-client.Discover:
-			if !ok {
-				continue
-			}
-			discovery, err := mqttclient.GetDiscovery(client.Config)
-			if err != nil {
-				client.logger.Error().Err(err).Msg("")
-			} else {
-				client.Pubs <- discovery
-			}
-			client.logger.Debug().Msg("Discovery")
-			up()
-		case <-updateTimer.C:
-			up()
-		}
-	}
+	return []models.Entry{entry}, nil
 }

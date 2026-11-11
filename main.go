@@ -19,13 +19,21 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
+	"github.com/ykgmfq/SystemPub/provider"
 	"github.com/ykgmfq/SystemPub/systemd"
-	"github.com/ykgmfq/SystemPub/zfs"
+	"github.com/ykgmfq/SystemPub/zfs/sanoid"
+	"github.com/ykgmfq/SystemPub/zfs/zpool"
 
 	"gopkg.in/yaml.v3"
 )
 
 var version = "1.3.6"
+
+// How often each group of sensors is checked while everything is healthy.
+const (
+	systemdInterval = 10 * time.Minute
+	zfsInterval     = 20 * time.Minute
+)
 
 // Reads the MQTT password from systemd credentials directory
 // Falls back to the password in the config if credential is not available
@@ -160,16 +168,25 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Could not get device info")
 	}
+	units, err := systemd.NewUnitProvider(ctx, dev, systemdInterval, baseLogger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not connect to systemd")
+	}
+	defer units.Close()
+
 	wdconn := make(chan bool)
 	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
-	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute, baseLogger)
-	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute, baseLogger)
-	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, zfsServer.Discover, wdconn)
+	systemdServer := provider.NewServer("systemd", mqttClient.Pubs, systemdInterval, baseLogger, units)
+	zfsServer := provider.NewServer("zfs", mqttClient.Pubs, zfsInterval, baseLogger,
+		sanoid.NewSanoidProvider(dev, zfsInterval, baseLogger),
+		zpool.NewZpoolProvider(zfsInterval),
+	)
+	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdServer.Discover, zfsServer.Discover, wdconn)
 
 	// A failed publisher must end the process, so that systemd stops getting watchdog pings and restarts the service.
 	mqttErr := make(chan error, 1)
 	go func() { mqttErr <- mqttClient.Serve(ctx) }()
-	go systemdClient.Serve(ctx)
+	go systemdServer.Serve(ctx)
 	go zfsServer.Serve(ctx)
 	go watchdog(ctx, wdconn, logger)
 

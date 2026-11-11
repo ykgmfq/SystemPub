@@ -95,6 +95,7 @@ func (p *SanoidProvider) Entries(ctx context.Context) ([]models.Entry, error) {
 			Domain:     "binary_sensor",
 			Payload:    mqttclient.ProblemPayload(ok),
 			Attributes: attrs,
+			Problem:    !ok,
 		})
 	}
 	return entries, nil

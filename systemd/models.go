@@ -1,18 +1,14 @@
 package systemd
 
 import (
-	"time"
-
-	"github.com/eclipse/paho.golang/paho"
+	"github.com/coreos/go-systemd/v22/dbus"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 )
 
-type DbusClient struct {
-	Conn     chan bool
-	Discover chan bool
-	Interval time.Duration
-	Config   models.MqttConfig
-	Pubs     chan *paho.Publish
-	logger   zerolog.Logger
+// UnitProvider reports failed systemd units as a binary sensor.
+type UnitProvider struct {
+	conn   *dbus.Conn
+	config models.MqttConfig
+	logger zerolog.Logger
 }
