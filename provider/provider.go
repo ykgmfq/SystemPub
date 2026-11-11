@@ -88,9 +88,15 @@ func (s Server) collect(ctx context.Context) []models.Entry {
 	return entries
 }
 
-func (s Server) publish(msgs []*paho.Publish) {
+// Hands the messages to the MQTT client.
+// It gives up once the context ends, because the client stops receiving at shutdown.
+func (s Server) publish(ctx context.Context, msgs []*paho.Publish) {
 	for _, msg := range msgs {
-		s.pubs <- msg
+		select {
+		case s.pubs <- msg:
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -120,10 +126,10 @@ func (s Server) update(ctx context.Context, discover bool) []models.Entry {
 		if err != nil {
 			s.logger.Error().Err(err).Msg("Could not build discovery messages")
 		} else {
-			s.publish(msgs)
+			s.publish(ctx, msgs)
 		}
 	}
-	s.publish(stateMessages(entries))
+	s.publish(ctx, stateMessages(entries))
 	s.logger.Debug().Int("entries", len(entries)).Msg("Updated sensors")
 	return entries
 }
