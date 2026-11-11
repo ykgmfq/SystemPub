@@ -26,7 +26,7 @@ import (
 	"github.com/ykgmfq/SystemPub/zfs/zpool"
 )
 
-var version = "1.4.0"
+var version = "1.4.1"
 
 // How often each group of sensors is checked while everything is healthy.
 const (
