@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -169,6 +170,14 @@ func connectionStatus(connected bool) string {
 	return "STATUS=Disconnected from MQTT server"
 }
 
+// Sends the given state to systemd.
+// A failed notification is logged rather than escalated, because the service keeps working without it.
+func notify(state string, logger zerolog.Logger) {
+	if _, err := daemon.SdNotify(false, state); err != nil {
+		logger.Warn().Err(err).Str("state", state).Msg("Could not notify systemd")
+	}
+}
+
 // Reports readiness and connection status to systemd and pets the watchdog when one is configured.
 // It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
 func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
@@ -176,8 +185,7 @@ func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 	if err != nil {
 		logger.Warn().Err(err).Msg("Could not determine systemd watchdog settings")
 	}
-	daemon.SdNotify(false, daemon.SdNotifyReady)
-	daemon.SdNotify(false, "STATUS=Connecting...")
+	notify(daemon.SdNotifyReady+"\nSTATUS=Connecting...", logger)
 	var ticks <-chan time.Time
 	if err == nil && watchTime > 0 {
 		timer := time.NewTicker(watchTime / 2)
@@ -187,14 +195,73 @@ func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 	for {
 		select {
 		case <-ctx.Done():
-			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
 		case connected := <-conn:
-			daemon.SdNotify(false, connectionStatus(connected))
+			notify(connectionStatus(connected), logger)
 		case <-ticks:
-			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
+			notify(daemon.SdNotifyWatchdog, logger)
 		}
 	}
+}
+
+// Sets up the sensors and runs them until a signal arrives or the MQTT client fails.
+// It returns only after every routine has stopped and all resources have been released.
+func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
+	logger := baseLogger.With().Str("mod", "main").Logger()
+	config, err := loadConfig(configPath, host, debug, logger)
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+	baseLogger = baseLogger.Level(config.Loglevel)
+	logger = logger.Level(config.Loglevel)
+	logger.Debug().Str("SystemPub version", version).Msg("")
+
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// A failing MQTT client cancels this context, so that every other routine shuts down as well.
+	ctx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
+
+	dev, err := systemd.GetDevice(ctx)
+	if err != nil {
+		return fmt.Errorf("could not get device info: %w", err)
+	}
+	systemdProviders, zfsProviders, closeProviders := newProviders(ctx, dev, logger, baseLogger)
+	defer closeProviders()
+
+	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
+	servers := newServers(mqttClient.Pubs, baseLogger, systemdProviders, zfsProviders)
+	if len(servers) == 0 {
+		return errors.New("no sensors available")
+	}
+	wdconn := make(chan bool)
+	for _, server := range servers {
+		mqttClient.ConnListeners = append(mqttClient.ConnListeners, server.Discover)
+	}
+	mqttClient.ConnListeners = append(mqttClient.ConnListeners, wdconn)
+
+	var wg sync.WaitGroup
+	mqttErr := make(chan error, 1)
+	wg.Go(func() {
+		err := mqttClient.Serve(ctx)
+		mqttErr <- err
+		if err != nil {
+			cancel()
+		}
+	})
+	for _, server := range servers {
+		wg.Go(func() { server.Serve(ctx) })
+	}
+	wg.Go(func() { watchdog(ctx, wdconn, logger) })
+
+	<-ctx.Done()
+	logger.Info().Msg("Shutting down")
+	notify(daemon.SdNotifyStopping+"\nSTATUS=Shutting down", logger)
+	wg.Wait()
+	if err := <-mqttErr; err != nil {
+		return fmt.Errorf("MQTT publisher stopped: %w", err)
+	}
+	return nil
 }
 
 func main() {
@@ -217,48 +284,10 @@ func main() {
 	baseLogger := zerolog.New(os.Stdout).Level(startLevel)
 	logger := baseLogger.With().Str("mod", "main").Logger()
 
-	config, err := loadConfig(*configPath, *mqttServerHost, *debug, logger)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Invalid configuration")
-	}
-	baseLogger = baseLogger.Level(config.Loglevel)
-	logger = logger.Level(config.Loglevel)
-	logger.Debug().Str("SystemPub version", version).Msg("")
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	dev, err := systemd.GetDevice(ctx)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not get device info")
-	}
-	systemdProviders, zfsProviders, closeProviders := newProviders(ctx, dev, logger, baseLogger)
-	defer closeProviders()
-
-	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
-	servers := newServers(mqttClient.Pubs, baseLogger, systemdProviders, zfsProviders)
-	if len(servers) == 0 {
-		logger.Fatal().Msg("No sensors available")
-	}
-	wdconn := make(chan bool)
-	for _, server := range servers {
-		mqttClient.ConnListeners = append(mqttClient.ConnListeners, server.Discover)
-	}
-	mqttClient.ConnListeners = append(mqttClient.ConnListeners, wdconn)
-
-	// A failed publisher must end the process, so that systemd stops getting watchdog pings and restarts the service.
-	mqttErr := make(chan error, 1)
-	go func() { mqttErr <- mqttClient.Serve(ctx) }()
-	for _, server := range servers {
-		go server.Serve(ctx)
-	}
-	go watchdog(ctx, wdconn, logger)
-
-	select {
-	case <-ctx.Done():
-	case err := <-mqttErr:
-		if err != nil {
-			logger.Fatal().Err(err).Msg("MQTT publisher stopped")
-		}
+	// The exit happens here, after run has released everything, and its non-zero status lets systemd restart the service.
+	if err := run(*configPath, *mqttServerHost, *debug, baseLogger); err != nil {
+		logger.Error().Err(err).Msg("SystemPub failed")
+		notify("STATUS=Failed: "+err.Error(), logger)
+		os.Exit(1)
 	}
 }

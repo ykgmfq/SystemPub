@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
@@ -220,6 +221,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 
 // Long-running routine that handles the MQTT connection and publishes messages.
 // It returns nil when the context is cancelled and an error when publishing can no longer continue.
+// Either way, it returns only after the connection has been closed cleanly or the attempt has timed out.
 func (client Mqttclient) Serve(ctx context.Context) error {
 	mqttctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -227,19 +229,37 @@ func (client Mqttclient) Serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create MQTT connection: %w", err)
 	}
+	err = client.publishLoop(mqttctx, connManage)
+	// Cancelling the connection's context makes autopaho send a disconnect to the server.
+	cancel()
+	client.logger.Info().Msg("Disconnecting from MQTT server")
+	return errors.Join(err, awaitShutdown(connManage))
+}
+
+// Publishes queued messages until the context ends.
+func (client Mqttclient) publishLoop(ctx context.Context, cm *autopaho.ConnectionManager) error {
 	for {
 		select {
-		case <-mqttctx.Done():
-			client.logger.Info().Msg("Routine stopped")
+		case <-ctx.Done():
 			return nil
 		case pub, ok := <-client.Pubs:
 			if !ok {
 				return errors.New("MQTT work channel closed")
 			}
-			if err := publish(mqttctx, connManage, pub); err != nil {
+			if err := publish(ctx, cm, pub); err != nil {
 				client.logger.Error().Err(err).Msg("Failed to publish")
 			}
 		}
+	}
+}
+
+// Waits for the connection manager to finish closing the connection.
+func awaitShutdown(cm *autopaho.ConnectionManager) error {
+	select {
+	case <-cm.Done():
+		return nil
+	case <-time.After(requestTimeout):
+		return errors.New("timed out while closing the MQTT connection")
 	}
 }
 
