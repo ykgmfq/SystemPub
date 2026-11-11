@@ -45,15 +45,6 @@ type MqttConfig struct {
 	JsonAttributesTopic string `json:"json_attributes_topic,omitempty"`
 }
 
-// Ouput of `hostnamectl` command
-type Hostnamectl struct {
-	Hostname                  string `json:"Hostname"`
-	OperatingSystemPrettyName string `json:"OperatingSystemPrettyName"`
-	MachineID                 string `json:"MachineID"`
-	HardwareVendor            string `json:"HardwareVendor"`
-	HardwareModel             string `json:"HardwareModel"`
-}
-
 // MQTT server location and credentials
 type MQTT struct {
 	Host     YAMLURL `yaml:"host"`

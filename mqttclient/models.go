@@ -1,10 +1,15 @@
 package mqttclient
 
 import (
+	"regexp"
+
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 )
+
+// Characters that are not allowed in MQTT topics and Home Assistant IDs.
+var invalidChars = regexp.MustCompile(`[^a-z0-9_-]`)
 
 // levelLogger lets the MQTT library log through zerolog at a fixed level.
 type levelLogger struct {

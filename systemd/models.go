@@ -12,3 +12,12 @@ type UnitProvider struct {
 	config models.MqttConfig
 	logger zerolog.Logger
 }
+
+// The part of the `hostnamectl --json=short` output that describes the device.
+type hostnamectl struct {
+	Hostname                  string `json:"Hostname"`
+	OperatingSystemPrettyName string `json:"OperatingSystemPrettyName"`
+	MachineID                 string `json:"MachineID"`
+	HardwareVendor            string `json:"HardwareVendor"`
+	HardwareModel             string `json:"HardwareModel"`
+}

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -20,10 +19,7 @@ import (
 
 // Replace invalid characters and convert to lowercase for MQTT compatibility
 func NormalizeStr(input string) string {
-	input = strings.ToLower(input)
-	re := regexp.MustCompile(`[^a-z0-9_-]`)
-	input = re.ReplaceAllString(input, "-")
-	return input
+	return invalidChars.ReplaceAllString(strings.ToLower(input), "-")
 }
 
 // Returns a MQTT client instance with initialized channels

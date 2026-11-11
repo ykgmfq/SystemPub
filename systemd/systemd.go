@@ -30,7 +30,7 @@ func GetDevice(ctx context.Context) (models.Device, error) {
 	if err != nil {
 		return models.Device{}, err
 	}
-	var status models.Hostnamectl
+	var status hostnamectl
 	if err = json.Unmarshal(out, &status); err != nil {
 		return models.Device{}, err
 	}
