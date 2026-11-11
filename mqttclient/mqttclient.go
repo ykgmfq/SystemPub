@@ -83,6 +83,16 @@ func ProblemPayload(ok bool) []byte {
 	return payload[ok]
 }
 
+// Println logs the arguments as one message, in the way fmt.Println joins them.
+func (l levelLogger) Println(v ...any) {
+	l.logger.WithLevel(l.level).Msg(strings.TrimSuffix(fmt.Sprintln(v...), "\n"))
+}
+
+// Printf logs a formatted message.
+func (l levelLogger) Printf(format string, v ...any) {
+	l.logger.WithLevel(l.level).Msg(fmt.Sprintf(format, v...))
+}
+
 // Handles client-side errors.
 func (client Mqttclient) clientError(err error) { client.logger.Error().Err(err).Msg("Client error") }
 
@@ -136,7 +146,10 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 		client.logger.Debug().Str("topic", p.Topic).Msg("Published message")
 	}
 
+	// The library reports errors and debug output on separate streams, which are mapped to the matching log levels.
 	pahoLogger := client.logger.With().Str("lib", "paho").Logger()
+	pahoErrors := levelLogger{logger: pahoLogger, level: zerolog.ErrorLevel}
+	pahoDebug := levelLogger{logger: pahoLogger, level: zerolog.DebugLevel}
 	user := client.Server.User
 	if client.Server.User == "" {
 		user = fmt.Sprintf("systemPub@%s", client.Device.Name)
@@ -148,8 +161,9 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 		SessionExpiryInterval:         60,
 		OnConnectionUp:                onconn,
 		OnConnectError:                onerr,
-		Errors:                        &pahoLogger,
-		Debug:                         &pahoLogger,
+		Errors:                        pahoErrors,
+		Debug:                         pahoDebug,
+		PahoErrors:                    pahoErrors,
 		TlsCfg:                        tlsConfig,
 		ClientConfig: paho.ClientConfig{
 			ClientID:           fmt.Sprintf("systemPub@%s_%s", client.Device.Name, client.Device.Identifiers[0][:4]),
