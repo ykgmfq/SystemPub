@@ -27,6 +27,9 @@ func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// MinMachineIDLength is the shortest device identifier from which the MQTT client ID can be derived.
+const MinMachineIDLength = 4
+
 // Device describes the host in the Home Assistant device registry.
 type Device struct {
 	Name         string    `json:"name"`

@@ -164,8 +164,9 @@ func username(server models.MQTT, device models.Device) string {
 }
 
 // clientID returns a client ID that is unique per host.
+// The device identifier must have at least models.MinMachineIDLength characters, which GetDevice guarantees.
 func clientID(device models.Device) string {
-	return fmt.Sprintf("systemPub@%s_%s", device.Name, device.Identifiers[0][:4])
+	return fmt.Sprintf("systemPub@%s_%s", device.Name, device.Identifiers[0][:models.MinMachineIDLength])
 }
 
 // buildClientConfig returns the autopaho configuration with all callbacks.

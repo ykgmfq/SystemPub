@@ -3,6 +3,7 @@ package systemd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"time"
 
@@ -31,6 +32,9 @@ func GetDevice(ctx context.Context) (models.Device, error) {
 	var status hostnamectl
 	if err = json.Unmarshal(out, &status); err != nil {
 		return models.Device{}, err
+	}
+	if len(status.MachineID) < models.MinMachineIDLength {
+		return models.Device{}, fmt.Errorf("machine ID %q is shorter than %d characters", status.MachineID, models.MinMachineIDLength)
 	}
 	return models.Device{Name: status.Hostname, SWversion: status.OperatingSystemPrettyName, Identifiers: [1]string{status.MachineID}, Manufacturer: status.HardwareVendor, Model: status.HardwareModel}, nil
 }
