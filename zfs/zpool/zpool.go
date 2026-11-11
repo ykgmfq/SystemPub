@@ -4,9 +4,11 @@ package zpool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os/exec"
+	osexec "os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ykgmfq/SystemPub/models"
@@ -19,6 +21,9 @@ func runZpool(ctx context.Context, exec func(context.Context, string, ...string)
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	out, err := exec(ctx, "zpool", "status", "-j", "--json-int").Output()
+	if exitErr, ok := errors.AsType[*osexec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
+		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -207,11 +212,20 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 }
 
 // NewZpoolProvider returns a provider that reads pool status via `zpool status -j`.
-func NewZpoolProvider(interval time.Duration) *ZpoolProvider {
+// It runs zpool once and fails when that does not work, for example because ZFS is missing or too old to report JSON, so that the caller can carry on without it.
+func NewZpoolProvider(ctx context.Context, interval time.Duration) (*ZpoolProvider, error) {
+	p := newZpoolProvider(interval)
+	if _, err := runZpool(ctx, p.execFn); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func newZpoolProvider(interval time.Duration) *ZpoolProvider {
 	return &ZpoolProvider{
 		interval: interval,
 		execFn: func(ctx context.Context, name string, arg ...string) zpoolExecutor {
-			return exec.CommandContext(ctx, name, arg...)
+			return osexec.CommandContext(ctx, name, arg...)
 		},
 	}
 }
