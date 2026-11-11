@@ -1,6 +1,7 @@
 package mqttclient
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 
@@ -19,6 +20,19 @@ func TestNewMqttclient(t *testing.T) {
 	assert.Equal(t, server, client.Server)
 	assert.Equal(t, device, client.Device)
 	assert.NotNil(t, client.Pubs)
+}
+
+// Messages from the library's error stream must be logged at error level, so they are visible at the default log level.
+func TestLevelLogger(t *testing.T) {
+	var buf bytes.Buffer
+	logger := levelLogger{logger: zerolog.New(&buf).Level(zerolog.InfoLevel), level: zerolog.ErrorLevel}
+	logger.Println("connect failed:", 42)
+	assert.JSONEq(t, `{"level":"error","message":"connect failed: 42"}`, buf.String())
+
+	buf.Reset()
+	hidden := levelLogger{logger: zerolog.New(&buf).Level(zerolog.InfoLevel), level: zerolog.DebugLevel}
+	hidden.Printf("queued %d packets", 3)
+	assert.Empty(t, buf.String())
 }
 
 func TestGetDiscovery(t *testing.T) {
