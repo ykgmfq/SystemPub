@@ -24,6 +24,7 @@ func sanoidState(exit int) string {
 		1: "Warning",
 		2: "Critical",
 		3: "Error",
+		4: "Dependent",
 	}
 	return sanoidExitLevels[exit]
 }
