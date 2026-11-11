@@ -38,13 +38,35 @@ const (
 	zfsInterval     = 20 * time.Minute
 )
 
+// The name under which the MQTT password must be provided to the service as a systemd credential.
+const mqttCredentialName = "mqtt"
+
+// otherCredentials returns the names of all credentials in the credentials directory except the expected one.
+func otherCredentials() ([]string, error) {
+	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
+	if credDir == "" {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(credDir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.Name() != mqttCredentialName {
+			names = append(names, entry.Name())
+		}
+	}
+	return names, nil
+}
+
 // loadMQTTPassword reads the MQTT password from the systemd credentials directory, if one is set.
 func loadMQTTPassword() (string, error) {
 	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
 	if credDir == "" {
 		return "", nil
 	}
-	data, err := os.ReadFile(filepath.Join(credDir, "mqtt"))
+	data, err := os.ReadFile(filepath.Join(credDir, mqttCredentialName))
 	if err != nil {
 		return "", err
 	}
@@ -74,6 +96,13 @@ func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig,
 
 // withPassword returns the configuration with the password from the credentials directory, which takes precedence over the configuration file.
 func withPassword(config models.SystemPubConfig, logger zerolog.Logger) (models.SystemPubConfig, error) {
+	others, err := otherCredentials()
+	if err != nil {
+		return config, fmt.Errorf("could not list credentials directory: %w", err)
+	}
+	for _, name := range others {
+		logger.Warn().Str("credential", name).Msgf("Ignoring credential, the password must be named %q", mqttCredentialName)
+	}
 	password, err := loadMQTTPassword()
 	if err != nil {
 		return config, fmt.Errorf("could not read password from credentials directory: %w", err)

@@ -104,3 +104,15 @@ func TestWatchdogConsumesWithoutSystemd(t *testing.T) {
 		}
 	}
 }
+
+// Credentials with unexpected names are reported, so a misnamed password does not go unnoticed.
+func TestOtherCredentials(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CREDENTIALS_DIRECTORY", dir)
+	for _, name := range []string{"mqtt", "mqtt-password"} {
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x"), 0600))
+	}
+	names, err := otherCredentials()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"mqtt-password"}, names)
+}
