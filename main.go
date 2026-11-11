@@ -30,7 +30,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "1.3.6"
+var version = "1.4.0"
 
 // How often each group of sensors is checked while everything is healthy.
 const (
