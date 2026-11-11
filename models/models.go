@@ -37,7 +37,6 @@ type MqttConfig struct {
 	DeviceClass         string `json:"device_class,omitempty"`
 	StateTopic          string `json:"state_topic"`
 	UniqueID            string `json:"unique_id"`
-	ValueTemplate       string `json:"value_template,omitempty"`
 	Device              Device `json:"device"`
 	ExpireAfter         int    `json:"expire_after,omitempty"`
 	ForceUpdate         bool   `json:"force_update"`

@@ -19,7 +19,7 @@ func getUnitConfig(device models.Device, interval time.Duration) models.MqttConf
 	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
 	stateTopic := "homeassistant/binary_sensor/" + unique_id + "/state"
 	attrTopic := "homeassistant/binary_sensor/" + unique_id + "/attributes"
-	return models.MqttConfig{Name: "Systemd units", StateTopic: stateTopic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
+	return models.MqttConfig{Name: "Systemd units", StateTopic: stateTopic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
 // Returns the client device properties.

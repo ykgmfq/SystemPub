@@ -59,7 +59,7 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 		unique_id := unique_id_pre + propStr
 		topic := "homeassistant/binary_sensor/" + unique_id + "/state"
 		attrTopic := "homeassistant/binary_sensor/" + unique_id + "/attributes"
-		configs[prop] = models.MqttConfig{Name: "Pool " + propStr, StateTopic: topic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ValueTemplate: "{{ value_json.sensor }}", ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
+		configs[prop] = models.MqttConfig{Name: "Pool " + propStr, StateTopic: topic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 	}
 	return configs
 }
