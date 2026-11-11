@@ -81,6 +81,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	assert.Equal(t, "problem", health.config.DeviceClass)
 	assert.NotEmpty(t, health.config.JsonAttributesTopic)
 	assert.Equal(t, []byte("OFF"), health.payload())
+	assert.False(t, health.problem)
 
 	// Attributes contain scrub fields and ISO timestamps
 	var attrMap map[string]any
@@ -127,6 +128,7 @@ func TestBuildPoolEntriesDegraded(t *testing.T) {
 	}
 	health := byUID[zpoolSensorUID(pool.PoolGUID, "health")]
 	assert.Equal(t, []byte("ON"), health.payload())
+	assert.True(t, health.problem)
 }
 
 func TestNoScrubTimesWhenZero(t *testing.T) {

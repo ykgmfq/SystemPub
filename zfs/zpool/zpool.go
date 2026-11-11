@@ -98,6 +98,7 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 		config:  healthCfg,
 		domain:  "binary_sensor",
 		payload: func() []byte { return mqttclient.ProblemPayload(pool.State == "ONLINE") },
+		problem: pool.State != "ONLINE",
 		attrs: func() ([]byte, error) {
 			m := map[string]any{
 				"scrub_state":    pool.ScanStats.State,
@@ -169,6 +170,7 @@ func buildPoolEntries(pool *zpoolPool, interval time.Duration) []zpoolSensorEntr
 				config:  diskHealthCfg,
 				domain:  "binary_sensor",
 				payload: func() []byte { return mqttclient.ProblemPayload(leaf.State == "ONLINE") },
+				problem: leaf.State != "ONLINE",
 				attrs: func() ([]byte, error) {
 					m := map[string]any{"slow_ios": leaf.SlowIOs}
 					if leaf.Path != "" {
@@ -235,6 +237,7 @@ func (p *ZpoolProvider) Entries(ctx context.Context) ([]models.Entry, error) {
 				Domain:     e.domain,
 				Payload:    e.payload(),
 				Attributes: attrs,
+				Problem:    e.problem,
 			})
 		}
 	}

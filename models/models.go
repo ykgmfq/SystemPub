@@ -90,4 +90,5 @@ type Entry struct {
 	Domain     string // "sensor" or "binary_sensor"
 	Payload    []byte
 	Attributes []byte // nil if no attributes
+	Problem    bool   // true if the sensor reports a problem, which makes the server check more often
 }

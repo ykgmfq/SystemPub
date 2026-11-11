@@ -1,4 +1,4 @@
-package zfs
+package provider
 
 import (
 	"context"
@@ -9,13 +9,16 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 )
 
+// While any sensor reports a problem, the server checks this often, so that a recovery shows up quickly.
+const problemInterval = time.Minute
+
 // Provider delivers sensor entries for discovery and state updates.
 type Provider interface {
 	Entries(context.Context) ([]models.Entry, error)
 }
 
-// ZfsServer runs all ZFS providers on a ticker and publishes to MQTT.
-type ZfsServer struct {
+// Server runs a group of providers on a ticker and publishes their sensors to MQTT.
+type Server struct {
 	Discover  chan bool
 	providers []Provider
 	interval  time.Duration

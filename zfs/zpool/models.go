@@ -55,6 +55,7 @@ type zpoolSensorEntry struct {
 	domain  string
 	payload func() []byte
 	attrs   func() ([]byte, error) // nil if no attributes
+	problem bool
 }
 
 // ZpoolProvider runs `zpool status` and publishes per-pool and per-disk MQTT sensors.
