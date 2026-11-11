@@ -1,17 +1,5 @@
 # SystemPub
 
-Go application that publishes system metrics (ZFS pool status, snapshots) to MQTT for Home Assistant autodiscovery.
-
-For additional context on installation, configuration, and updates, consult the [project wiki](https://github.com/ykgmfq/SystemPub/wiki).
-
-## Project layout
-
-- `models/` — shared type and model definitions (no business logic)
-- `sanoid/` — ZFS/sanoid integration; types in `models.go`, logic in `sanoid.go` and `zpool.go`
-- `mqttclient/` — MQTT client wrapper
-- `systemd/` — systemd integration
-- `main.go` — entry point and wiring
-
 ## Code conventions
 
 **Type/model definitions go in their own files**, separate from business logic.
@@ -74,11 +62,3 @@ Scripts live in `.github/scripts/` and are referenced from the workflow step.
 
 **In shell scripts, avoid line continuations with backslash.**
 Use intermediate variables instead.
-
-## Commands
-
-```sh
-just build   # build binary
-just test    # run tests
-just run     # build and run
-```

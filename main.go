@@ -8,11 +8,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -23,11 +20,10 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
 	"github.com/ykgmfq/SystemPub/provider"
+	"github.com/ykgmfq/SystemPub/service"
 	"github.com/ykgmfq/SystemPub/systemd"
 	"github.com/ykgmfq/SystemPub/zfs/sanoid"
 	"github.com/ykgmfq/SystemPub/zfs/zpool"
-
-	"gopkg.in/yaml.v3"
 )
 
 var version = "1.4.0"
@@ -37,118 +33,6 @@ const (
 	systemdInterval = 10 * time.Minute
 	zfsInterval     = 20 * time.Minute
 )
-
-// The name under which the MQTT password must be provided to the service as a systemd credential.
-const mqttCredentialName = "mqtt"
-
-// otherCredentials returns the names of all credentials in the credentials directory except the expected one.
-func otherCredentials() ([]string, error) {
-	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
-	if credDir == "" {
-		return nil, nil
-	}
-	entries, err := os.ReadDir(credDir)
-	if err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, entry := range entries {
-		if entry.Name() != mqttCredentialName {
-			names = append(names, entry.Name())
-		}
-	}
-	return names, nil
-}
-
-// loadMQTTPassword reads the MQTT password from the systemd credentials directory, if one is set.
-func loadMQTTPassword() (string, error) {
-	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
-	if credDir == "" {
-		return "", nil
-	}
-	data, err := os.ReadFile(filepath.Join(credDir, mqttCredentialName))
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
-// readConfig reads the application configuration from the given file.
-func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig, error) {
-	config := models.SystemPubConfigDefault()
-	file, err := os.Open(location)
-	if errors.Is(err, fs.ErrNotExist) {
-		logger.Warn().Str("location", location).Msg("Configuration file not found, using defaults")
-		return config, nil
-	}
-	if err != nil {
-		logger.Warn().Err(err).Msg("Could not open configuration file")
-		return config, err
-	}
-	defer file.Close()
-	if err = yaml.NewDecoder(file).Decode(&config); err != nil {
-		logger.Error().Err(err).Msg("Malformed configuration file")
-		return config, err
-	}
-	logger.Debug().Str("location", location).Interface("content", config).Msg("")
-	return config, nil
-}
-
-// withPassword returns the configuration with the password from the credentials directory, which takes precedence over the configuration file.
-func withPassword(config models.SystemPubConfig, logger zerolog.Logger) (models.SystemPubConfig, error) {
-	others, err := otherCredentials()
-	if err != nil {
-		return config, fmt.Errorf("could not list credentials directory: %w", err)
-	}
-	for _, name := range others {
-		logger.Warn().Str("credential", name).Msgf("Ignoring credential, the password must be named %q", mqttCredentialName)
-	}
-	password, err := loadMQTTPassword()
-	if err != nil {
-		return config, fmt.Errorf("could not read password from credentials directory: %w", err)
-	}
-	if password == "" {
-		return config, nil
-	}
-	if config.MQTTServer.Password != "" {
-		logger.Warn().Msg("Overriding MQTT password from configuration file with credentials directory")
-	}
-	config.MQTTServer.Password = password
-	return config, nil
-}
-
-// withHost returns the configuration with the server host given on the command line, if any.
-func withHost(config models.SystemPubConfig, host string) (models.SystemPubConfig, error) {
-	if host == "" {
-		return config, nil
-	}
-	parsedURL, err := models.ParseServerURL(host)
-	if err != nil {
-		return config, fmt.Errorf("malformed MQTT server URL: %w", err)
-	}
-	config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
-	return config, nil
-}
-
-// loadConfig assembles the configuration from the file, the credentials directory and the command line.
-func loadConfig(configPath, host string, debug bool, logger zerolog.Logger) (models.SystemPubConfig, error) {
-	config := models.SystemPubConfigDefault()
-	if configPath != "" {
-		conf, err := readConfig(configPath, logger)
-		if err != nil {
-			return config, fmt.Errorf("could not read configuration file: %w", err)
-		}
-		config = conf
-	}
-	config, err := withPassword(config, logger)
-	if err != nil {
-		return config, err
-	}
-	if debug {
-		config.Loglevel = zerolog.DebugLevel
-	}
-	return withHost(config, host)
-}
 
 // newProviders returns the providers of the systemd and ZFS sensor groups.
 // Providers that do not work on this host are logged and left out.
@@ -190,58 +74,16 @@ func newServers(pubs chan *paho.Publish, logger zerolog.Logger, systemdProviders
 	return servers
 }
 
-// connectionStatus returns the systemd status text for the given MQTT connection state.
-func connectionStatus(connected bool) string {
-	if connected {
-		return "STATUS=Connected to MQTT server"
-	}
-	return "STATUS=Disconnected from MQTT server"
-}
-
-// notify sends the given state to systemd.
-// A failed notification is logged rather than escalated, because the service keeps working without it.
-func notify(state string, logger zerolog.Logger) {
-	if _, err := daemon.SdNotify(false, state); err != nil {
-		logger.Warn().Err(err).Str("state", state).Msg("Could not notify systemd")
-	}
-}
-
-// watchdog reports readiness and connection status to systemd and pets the watchdog when one is configured.
-// It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
-func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
-	watchTime, err := daemon.SdWatchdogEnabled(false)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Could not determine systemd watchdog settings")
-	}
-	notify(daemon.SdNotifyReady+"\nSTATUS=Connecting...", logger)
-	var ticks <-chan time.Time
-	if err == nil && watchTime > 0 {
-		timer := time.NewTicker(watchTime / 2)
-		defer timer.Stop()
-		ticks = timer.C
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case connected := <-conn:
-			notify(connectionStatus(connected), logger)
-		case <-ticks:
-			notify(daemon.SdNotifyWatchdog, logger)
-		}
-	}
-}
-
 // run sets up the sensors and runs them until a signal arrives or the MQTT client fails.
 // It returns only after every routine has stopped and all resources have been released.
 func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	logger := baseLogger.With().Str("mod", "main").Logger()
-	config, err := loadConfig(configPath, host, debug, logger)
+	cfg, err := service.LoadConfig(configPath, host, debug, logger)
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-	baseLogger = baseLogger.Level(config.Loglevel)
-	logger = logger.Level(config.Loglevel)
+	baseLogger = baseLogger.Level(cfg.Loglevel)
+	logger = logger.Level(cfg.Loglevel)
 	logger.Debug().Str("SystemPub version", version).Msg("")
 
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -257,7 +99,7 @@ func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	systemdProviders, zfsProviders, closeProviders := newProviders(ctx, dev, logger, baseLogger)
 	defer closeProviders()
 
-	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
+	mqttClient := mqttclient.NewMqttclient(cfg.MQTTServer, dev, baseLogger)
 	servers := newServers(mqttClient.Pubs, baseLogger, systemdProviders, zfsProviders)
 	if len(servers) == 0 {
 		return errors.New("no sensors available")
@@ -280,11 +122,11 @@ func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	for _, server := range servers {
 		wg.Go(func() { server.Serve(ctx) })
 	}
-	wg.Go(func() { watchdog(ctx, wdconn, logger) })
+	wg.Go(func() { service.Watchdog(ctx, wdconn, logger) })
 
 	<-ctx.Done()
 	logger.Info().Msg("Shutting down")
-	notify(daemon.SdNotifyStopping+"\nSTATUS=Shutting down", logger)
+	service.Notify(daemon.SdNotifyStopping+"\nSTATUS=Shutting down", logger)
 	wg.Wait()
 	if err := <-mqttErr; err != nil {
 		return fmt.Errorf("MQTT publisher stopped: %w", err)
@@ -316,7 +158,7 @@ func main() {
 	// The exit happens here, after run has released everything, and its non-zero status lets systemd restart the service.
 	if err := run(*configPath, *mqttServerHost, *debug, baseLogger); err != nil {
 		logger.Error().Err(err).Msg("SystemPub failed")
-		notify("STATUS=Failed: "+err.Error(), logger)
+		service.Notify("STATUS=Failed: "+err.Error(), logger)
 		os.Exit(1)
 	}
 }
