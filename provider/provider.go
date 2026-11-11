@@ -27,15 +27,7 @@ func NewServer(name string, pubs chan *paho.Publish, interval time.Duration, log
 func discoveryMessages(entries []models.Entry) ([]*paho.Publish, error) {
 	msgs := make([]*paho.Publish, 0, len(entries))
 	for _, e := range entries {
-		var (
-			msg *paho.Publish
-			err error
-		)
-		if e.Domain == "sensor" {
-			msg, err = mqttclient.GetSensorDiscovery(e.Config)
-		} else {
-			msg, err = mqttclient.GetDiscovery(e.Config)
-		}
+		msg, err := mqttclient.GetDiscovery(e.Domain, e.Config)
 		if err != nil {
 			return nil, err
 		}

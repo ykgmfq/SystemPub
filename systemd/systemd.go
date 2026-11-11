@@ -17,8 +17,8 @@ import (
 // Returns a MqttConfig for the systemd units binary sensor.
 func getUnitConfig(device models.Device, interval time.Duration) models.MqttConfig {
 	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
-	stateTopic := "homeassistant/binary_sensor/" + unique_id + "/state"
-	attrTopic := "homeassistant/binary_sensor/" + unique_id + "/attributes"
+	stateTopic := mqttclient.StateTopic(models.BinarySensor, unique_id)
+	attrTopic := mqttclient.AttributesTopic(models.BinarySensor, unique_id)
 	return models.MqttConfig{Name: "Systemd units", StateTopic: stateTopic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
@@ -64,7 +64,7 @@ func unitEntry(config models.MqttConfig, failedUnits []string) (models.Entry, er
 	ok := len(failedUnits) == 0
 	return models.Entry{
 		Config:     config,
-		Domain:     "binary_sensor",
+		Domain:     models.BinarySensor,
 		Payload:    mqttclient.ProblemPayload(ok),
 		Attributes: attrs,
 		Problem:    !ok,

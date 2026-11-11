@@ -58,10 +58,18 @@ type SystemPubConfig struct {
 	Loglevel   zerolog.Level `yaml:"loglevel"`
 }
 
+// Domain is the Home Assistant entity type a sensor is published as.
+type Domain string
+
+const (
+	BinarySensor Domain = "binary_sensor"
+	Sensor       Domain = "sensor"
+)
+
 // Entry holds the MQTT config and current state for one sensor.
 type Entry struct {
 	Config     MqttConfig
-	Domain     string // "sensor" or "binary_sensor"
+	Domain     Domain
 	Payload    []byte
 	Attributes []byte // nil if no attributes
 	Problem    bool   // true if the sensor reports a problem, which makes the server check more often

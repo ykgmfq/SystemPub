@@ -80,7 +80,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 
 	// Pool health binary_sensor
 	health := byUID[zpoolSensorUID(guid, "health")]
-	assert.Equal(t, "binary_sensor", health.Domain)
+	assert.Equal(t, models.BinarySensor, health.Domain)
 	assert.Equal(t, "problem", health.Config.DeviceClass)
 	assert.NotEmpty(t, health.Config.JsonAttributesTopic)
 	assert.Equal(t, []byte("OFF"), health.Payload)
@@ -96,7 +96,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 
 	// Capacity sensors
 	alloc := byUID[zpoolSensorUID(guid, "alloc")]
-	assert.Equal(t, "sensor", alloc.Domain)
+	assert.Equal(t, models.Sensor, alloc.Domain)
 	assert.Equal(t, "data_size", alloc.Config.DeviceClass)
 	assert.Equal(t, "GiB", alloc.Config.UnitOfMeasurement)
 	assert.Equal(t, "measurement", alloc.Config.StateClass)
@@ -109,7 +109,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 
 	// Disk health with attributes
 	diskHealth := byUID[zpoolSensorUID(guid, "sda_health")]
-	assert.Equal(t, "binary_sensor", diskHealth.Domain)
+	assert.Equal(t, models.BinarySensor, diskHealth.Domain)
 	var diskAttrMap map[string]any
 	diskAttrsData := diskHealth.Attributes
 	require.NoError(t, json.Unmarshal(diskAttrsData, &diskAttrMap))

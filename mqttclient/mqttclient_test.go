@@ -41,7 +41,7 @@ func TestGetDiscovery(t *testing.T) {
 		Name:     "Test Sensor",
 	}
 
-	discoveryMsg, err := GetDiscovery(config)
+	discoveryMsg, err := GetDiscovery(models.BinarySensor, config)
 	require.NoError(t, err)
 
 	assert.Equal(t, "homeassistant/binary_sensor/test_sensor/config", discoveryMsg.Topic)
@@ -51,6 +51,15 @@ func TestGetDiscovery(t *testing.T) {
 	err = json.Unmarshal(discoveryMsg.Payload, &payload)
 	assert.NoError(t, err)
 	assert.Equal(t, "Test Sensor", payload["name"])
+
+	sensorMsg, err := GetDiscovery(models.Sensor, config)
+	require.NoError(t, err)
+	assert.Equal(t, "homeassistant/sensor/test_sensor/config", sensorMsg.Topic)
+}
+
+func TestSensorTopics(t *testing.T) {
+	assert.Equal(t, "homeassistant/binary_sensor/x/state", StateTopic(models.BinarySensor, "x"))
+	assert.Equal(t, "homeassistant/sensor/x/attributes", AttributesTopic(models.Sensor, "x"))
 }
 
 func TestProblemPayload(t *testing.T) {

@@ -58,8 +58,8 @@ func getSnapshotState(ctx context.Context, run func(context.Context, string, ...
 // GetSnapshotConfig returns the autodiscovery config for the snapshot binary sensor.
 func GetSnapshotConfig(device models.Device, interval time.Duration) models.MqttConfig {
 	uniqueID := mqttclient.NormalizeStr(device.Name) + "_pool_snapshots"
-	topic := "homeassistant/binary_sensor/" + uniqueID + "/state"
-	attrTopic := "homeassistant/binary_sensor/" + uniqueID + "/attributes"
+	topic := mqttclient.StateTopic(models.BinarySensor, uniqueID)
+	attrTopic := mqttclient.AttributesTopic(models.BinarySensor, uniqueID)
 	return models.MqttConfig{Name: "Pool snapshots", StateTopic: topic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: uniqueID, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
@@ -99,7 +99,7 @@ func (p *SanoidProvider) Entries(ctx context.Context) ([]models.Entry, error) {
 	}
 	return []models.Entry{{
 		Config:     p.config,
-		Domain:     "binary_sensor",
+		Domain:     models.BinarySensor,
 		Payload:    mqttclient.ProblemPayload(ok),
 		Attributes: attrs,
 		Problem:    !ok,
