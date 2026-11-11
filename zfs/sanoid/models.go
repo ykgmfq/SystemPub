@@ -3,6 +3,8 @@ package sanoid
 import (
 	"context"
 
+	"github.com/rs/zerolog"
+
 	"github.com/ykgmfq/SystemPub/models"
 )
 
@@ -14,4 +16,5 @@ type commandExecutor interface {
 type SanoidProvider struct {
 	configs   map[models.Property]models.MqttConfig
 	shellExec func(context.Context, string, ...string) commandExecutor
+	logger    zerolog.Logger
 }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/eclipse/paho.golang/paho"
+	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 )
 
@@ -13,4 +14,5 @@ type DbusClient struct {
 	Interval time.Duration
 	Config   models.MqttConfig
 	Pubs     chan *paho.Publish
+	logger   zerolog.Logger
 }

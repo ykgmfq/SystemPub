@@ -26,7 +26,7 @@ loglevel: warn
 	assert.NoError(t, err, "Failed to write to temporary configuration file")
 	tempFile.Close()
 
-	config, err := readConfig(tempFile.Name())
+	config, err := readConfig(tempFile.Name(), zerolog.Nop())
 	assert.NoError(t, err, "Failed to read config")
 
 	assert.Equal(t, "mqtt://192.168.0.3:8080", config.MQTTServer.Host.String(), "Host value mismatch")
@@ -99,7 +99,7 @@ func TestWatchdogConsumesWithoutSystemd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	conn := make(chan bool)
-	go watchdog(ctx, conn)
+	go watchdog(ctx, conn, zerolog.Nop())
 	for _, connected := range []bool{true, false, true} {
 		select {
 		case conn <- connected:

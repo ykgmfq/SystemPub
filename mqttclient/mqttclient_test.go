@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ykgmfq/SystemPub/models"
@@ -13,7 +14,7 @@ func TestNewMqttclient(t *testing.T) {
 	server := models.SystemPubConfigDefault().MQTTServer
 	device := models.Device{Name: "TestDevice", Identifiers: [1]string{"1234"}}
 
-	client := NewMqttclient(server, device)
+	client := NewMqttclient(server, device, zerolog.Nop())
 
 	assert.Equal(t, server, client.Server)
 	assert.Equal(t, device, client.Device)

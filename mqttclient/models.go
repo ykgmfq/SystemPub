@@ -2,6 +2,7 @@ package mqttclient
 
 import (
 	"github.com/eclipse/paho.golang/paho"
+	"github.com/rs/zerolog"
 	"github.com/ykgmfq/SystemPub/models"
 )
 
@@ -10,4 +11,5 @@ type Mqttclient struct {
 	Device        models.Device
 	Pubs          chan *paho.Publish
 	ConnListeners []chan bool
+	logger        zerolog.Logger
 }

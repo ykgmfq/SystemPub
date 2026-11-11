@@ -26,10 +26,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	logger  zerolog.Logger
-	version = "1.3.6"
-)
+var version = "1.3.6"
 
 // Reads the MQTT password from systemd credentials directory
 // Falls back to the password in the config if credential is not available
@@ -46,32 +43,32 @@ func loadMQTTPassword() (string, error) {
 }
 
 // Reads the configuration file and returns the application configuration.
-func readConfig(location string) (models.SystemPubConfig, error) {
+func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
 	if errors.Is(err, fs.ErrNotExist) {
-		logger.Warn().Str("mod", "main").Str("location", location).Msg("Configuration file not found, using defaults")
+		logger.Warn().Str("location", location).Msg("Configuration file not found, using defaults")
 		return config, nil
 	}
 	if err != nil {
-		logger.Warn().Str("mod", "main").Err(err).Msg("")
+		logger.Warn().Err(err).Msg("Could not open configuration file")
 		return config, err
 	}
 	defer file.Close()
 	if err = yaml.NewDecoder(file).Decode(&config); err != nil {
-		logger.Error().Str("mod", "main").Err(err).Msg("Malformed configuration file")
+		logger.Error().Err(err).Msg("Malformed configuration file")
 		return config, err
 	}
-	logger.Debug().Str("mod", "main").Str("location", location).Interface("content", config).Msg("")
+	logger.Debug().Str("location", location).Interface("content", config).Msg("")
 	return config, nil
 }
 
 // Reports readiness and connection status to systemd and pets the watchdog when one is configured.
 // It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
-func watchdog(ctx context.Context, conn chan bool) {
+func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 	watchTime, err := daemon.SdWatchdogEnabled(false)
 	if err != nil {
-		logger.Warn().Str("mod", "main").Err(err).Msg("Could not determine systemd watchdog settings")
+		logger.Warn().Err(err).Msg("Could not determine systemd watchdog settings")
 	}
 	daemon.SdNotify(false, daemon.SdNotifyReady)
 	daemon.SdNotify(false, "STATUS=Connecting...")
@@ -101,12 +98,6 @@ func watchdog(ctx context.Context, conn chan bool) {
 }
 
 func main() {
-	// Logging
-	logger = zerolog.New(os.Stdout).With().Logger()
-	zfs.Logger = logger
-	systemd.Logger = logger
-	mqttclient.Logger = logger
-
 	// Flags and config
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")
@@ -119,14 +110,20 @@ func main() {
 		return
 	}
 
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	// Logging starts at the level given on the command line and switches to the configured level once the configuration has been read.
+	startLevel := zerolog.InfoLevel
+	if *debug {
+		startLevel = zerolog.DebugLevel
+	}
+	baseLogger := zerolog.New(os.Stdout).Level(startLevel)
+	logger := baseLogger.With().Str("mod", "main").Logger()
 
 	// Configuration
 	config := models.SystemPubConfigDefault()
 	if *configPath != "" {
-		conf, err := readConfig(*configPath)
+		conf, err := readConfig(*configPath, logger)
 		if err != nil {
-			logger.Fatal().Str("mod", "main").Err(err).Msg("Could not read configuration file")
+			logger.Fatal().Err(err).Msg("Could not read configuration file")
 		}
 		config = conf
 	}
@@ -134,11 +131,11 @@ func main() {
 	// Load MQTT password from credentials directory if available
 	password, err := loadMQTTPassword()
 	if err != nil {
-		logger.Fatal().Str("mod", "main").Err(err).Msg("Could not read password from credentials directory")
+		logger.Fatal().Err(err).Msg("Could not read password from credentials directory")
 	}
 	if password != "" {
 		if config.MQTTServer.Password != "" {
-			logger.Warn().Str("mod", "main").Msg("Overriding MQTT password from configuration file with credentials directory")
+			logger.Warn().Msg("Overriding MQTT password from configuration file with credentials directory")
 		}
 		config.MQTTServer.Password = password
 	}
@@ -150,23 +147,24 @@ func main() {
 		if parsedURL, err := url.Parse(*mqttServerHost); err == nil {
 			config.MQTTServer.Host = models.YAMLURL{URL: parsedURL}
 		} else {
-			logger.Error().Str("mod", "main").Err(err).Msg("Malformed MQTT server URL")
+			logger.Error().Err(err).Msg("Malformed MQTT server URL")
 		}
 	}
-	zerolog.SetGlobalLevel(config.Loglevel)
-	logger.Debug().Str("mod", "main").Str("SystemPub version", version).Msg("")
+	baseLogger = baseLogger.Level(config.Loglevel)
+	logger = logger.Level(config.Loglevel)
+	logger.Debug().Str("SystemPub version", version).Msg("")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	dev, err := systemd.GetDevice(ctx)
 	if err != nil {
-		logger.Fatal().Str("mod", "main").Err(err).Msg("Could not get device info")
+		logger.Fatal().Err(err).Msg("Could not get device info")
 	}
 	wdconn := make(chan bool)
-	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev)
-	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute)
-	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute)
+	mqttClient := mqttclient.NewMqttclient(config.MQTTServer, dev, baseLogger)
+	systemdClient := systemd.NewDbusclient(mqttClient.Pubs, dev, 10*time.Minute, baseLogger)
+	zfsServer := zfs.NewZfsServer(mqttClient.Pubs, dev, 20*time.Minute, baseLogger)
 	mqttClient.ConnListeners = append(mqttClient.ConnListeners, systemdClient.Discover, zfsServer.Discover, wdconn)
 
 	// A failed publisher must end the process, so that systemd stops getting watchdog pings and restarts the service.
@@ -174,13 +172,13 @@ func main() {
 	go func() { mqttErr <- mqttClient.Serve(ctx) }()
 	go systemdClient.Serve(ctx)
 	go zfsServer.Serve(ctx)
-	go watchdog(ctx, wdconn)
+	go watchdog(ctx, wdconn, logger)
 
 	select {
 	case <-ctx.Done():
 	case err := <-mqttErr:
 		if err != nil {
-			logger.Fatal().Str("mod", "main").Err(err).Msg("MQTT publisher stopped")
+			logger.Fatal().Err(err).Msg("MQTT publisher stopped")
 		}
 	}
 }

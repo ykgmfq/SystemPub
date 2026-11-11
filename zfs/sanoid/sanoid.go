@@ -14,8 +14,6 @@ import (
 	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
-var Logger zerolog.Logger
-
 // Maps Sanoid exit codes to human-readable states.
 func sanoidState(exit int) string {
 	if exit > 4 || exit < 0 {
@@ -66,10 +64,13 @@ func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Pro
 }
 
 // NewSanoidProvider returns a provider that runs sanoid to check pool state.
-func NewSanoidProvider(device models.Device, interval time.Duration) *SanoidProvider {
+func NewSanoidProvider(device models.Device, interval time.Duration, logger zerolog.Logger) *SanoidProvider {
 	return &SanoidProvider{
-		configs:   GetPoolConfigs(device, interval),
-		shellExec: func(ctx context.Context, name string, arg ...string) commandExecutor { return exec.CommandContext(ctx, name, arg...) },
+		configs: GetPoolConfigs(device, interval),
+		shellExec: func(ctx context.Context, name string, arg ...string) commandExecutor {
+			return exec.CommandContext(ctx, name, arg...)
+		},
+		logger: logger.With().Str("mod", "sanoid").Logger(),
 	}
 }
 
@@ -82,7 +83,7 @@ func (p *SanoidProvider) Entries(ctx context.Context) ([]models.Entry, error) {
 			return nil, err
 		}
 		if !ok && state != "" {
-			Logger.Warn().Str("mod", "sanoid").Str("state", state).Msg("")
+			p.logger.Warn().Str("property", models.PropStr[property]).Str("state", state).Msg("Pool problem")
 		}
 		attrs, err := json.Marshal(map[string]string{"output": output})
 		if err != nil {

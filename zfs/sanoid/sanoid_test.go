@@ -1,12 +1,15 @@
 package sanoid
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"testing"
+	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ykgmfq/SystemPub/models"
@@ -80,4 +83,19 @@ func TestGetPoolStateKilled(t *testing.T) {
 	result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
 	assert.Equal(t, killedErr, err, "Expected killed-process error to be escalated")
 	assert.False(t, result)
+}
+
+// Pool problems must reach the logger handed to the provider, so they show up in the service log.
+func TestEntriesLogsPoolProblem(t *testing.T) {
+	sanoidErr := makeExitError(2)
+	require.NotNil(t, sanoidErr)
+	var buf bytes.Buffer
+	provider := NewSanoidProvider(models.Device{Name: "test"}, time.Minute, zerolog.New(&buf))
+	provider.shellExec = func(_ context.Context, _ string, _ ...string) commandExecutor {
+		return &MockCommandExecutor{err: sanoidErr}
+	}
+	_, err := provider.Entries(context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"mod":"sanoid"`)
+	assert.Contains(t, buf.String(), `"state":"Critical"`)
 }
