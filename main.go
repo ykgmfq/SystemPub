@@ -176,11 +176,11 @@ func main() {
 		defer units.Close()
 		systemdProviders = append(systemdProviders, units)
 	}
-	pool, err := sanoid.NewSanoidProvider(ctx, dev, zfsInterval, baseLogger)
+	snapshots, err := sanoid.NewSanoidProvider(ctx, dev, zfsInterval, baseLogger)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Sanoid does not work, skipping the sanoid sensors")
+		logger.Warn().Err(err).Msg("Sanoid does not work, skipping the snapshot sensor")
 	} else {
-		zfsProviders = append(zfsProviders, pool)
+		zfsProviders = append(zfsProviders, snapshots)
 	}
 	pools, err := zpool.NewZpoolProvider(ctx, zfsInterval)
 	if err != nil {

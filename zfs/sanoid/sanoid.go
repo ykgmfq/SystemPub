@@ -1,4 +1,4 @@
-// Package sanoid provides a ZFS provider that checks pool health via the sanoid CLI.
+// Package sanoid provides a ZFS provider that checks snapshot freshness via the sanoid CLI.
 package sanoid
 
 import (
@@ -30,12 +30,12 @@ func sanoidState(exit int) string {
 	return sanoidExitLevels[exit]
 }
 
-// Runs Sanoid to check one of pool health, capacity and snapshots.
-// Returns (ok, state, output, err): state is non-empty when exit code 1-4 (pool problem, sanoid healthy).
-func getPoolState(ctx context.Context, run func(context.Context, string, ...string) commandExecutor, p models.Property) (bool, string, string, error) {
+// Runs sanoid to check snapshot freshness.
+// Returns (ok, state, output, err): state is non-empty when exit code 1-4 (snapshot problem, sanoid healthy).
+func getSnapshotState(ctx context.Context, run func(context.Context, string, ...string) commandExecutor) (bool, string, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	cmd := run(ctx, "sanoid", "--monitor-"+models.PropStr[p])
+	cmd := run(ctx, "sanoid", "--monitor-snapshots")
 	raw, err := cmd.Output()
 	output := strings.TrimSpace(string(raw))
 	if err == nil {
@@ -55,25 +55,20 @@ func getPoolState(ctx context.Context, run func(context.Context, string, ...stri
 	return false, sanoidState(exitCode), output, nil
 }
 
-// GetPoolConfigs gathers autodiscovery configs for the health, capacity and snapshot binary sensors.
-func GetPoolConfigs(device models.Device, interval time.Duration) map[models.Property]models.MqttConfig {
-	configs := make(map[models.Property]models.MqttConfig, len(models.PropStr))
-	unique_id_pre := mqttclient.NormalizeStr(device.Name) + "_pool_"
-	for prop, propStr := range models.PropStr {
-		unique_id := unique_id_pre + propStr
-		topic := "homeassistant/binary_sensor/" + unique_id + "/state"
-		attrTopic := "homeassistant/binary_sensor/" + unique_id + "/attributes"
-		configs[prop] = models.MqttConfig{Name: "Pool " + propStr, StateTopic: topic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
-	}
-	return configs
+// GetSnapshotConfig returns the autodiscovery config for the snapshot binary sensor.
+func GetSnapshotConfig(device models.Device, interval time.Duration) models.MqttConfig {
+	uniqueID := mqttclient.NormalizeStr(device.Name) + "_pool_snapshots"
+	topic := "homeassistant/binary_sensor/" + uniqueID + "/state"
+	attrTopic := "homeassistant/binary_sensor/" + uniqueID + "/attributes"
+	return models.MqttConfig{Name: "Pool snapshots", StateTopic: topic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: uniqueID, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
-// NewSanoidProvider returns a provider that runs sanoid to check pool state.
+// NewSanoidProvider returns a provider that runs sanoid to check snapshot freshness.
 // It runs sanoid once and fails when sanoid itself does not work, so that the caller can carry on without it.
-// Pool problems found by that run do not count as a failure.
+// Snapshot problems found by that run do not count as a failure.
 func NewSanoidProvider(ctx context.Context, device models.Device, interval time.Duration, logger zerolog.Logger) (*SanoidProvider, error) {
 	p := newSanoidProvider(device, interval, logger)
-	if _, _, _, err := getPoolState(ctx, p.shellExec, models.Health); err != nil {
+	if _, _, _, err := getSnapshotState(ctx, p.shellExec); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -81,7 +76,7 @@ func NewSanoidProvider(ctx context.Context, device models.Device, interval time.
 
 func newSanoidProvider(device models.Device, interval time.Duration, logger zerolog.Logger) *SanoidProvider {
 	return &SanoidProvider{
-		configs: GetPoolConfigs(device, interval),
+		config: GetSnapshotConfig(device, interval),
 		shellExec: func(ctx context.Context, name string, arg ...string) commandExecutor {
 			return exec.CommandContext(ctx, name, arg...)
 		},
@@ -89,28 +84,24 @@ func newSanoidProvider(device models.Device, interval time.Duration, logger zero
 	}
 }
 
-// Entries runs sanoid for each monitored property and returns the current sensor states.
+// Entries runs sanoid and returns the current state of the snapshot sensor.
 func (p *SanoidProvider) Entries(ctx context.Context) ([]models.Entry, error) {
-	entries := make([]models.Entry, 0, len(p.configs))
-	for property, config := range p.configs {
-		ok, state, output, err := getPoolState(ctx, p.shellExec, property)
-		if err != nil {
-			return nil, err
-		}
-		if !ok && state != "" {
-			p.logger.Warn().Str("property", models.PropStr[property]).Str("state", state).Msg("Pool problem")
-		}
-		attrs, err := json.Marshal(map[string]string{"output": output})
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, models.Entry{
-			Config:     config,
-			Domain:     "binary_sensor",
-			Payload:    mqttclient.ProblemPayload(ok),
-			Attributes: attrs,
-			Problem:    !ok,
-		})
+	ok, state, output, err := getSnapshotState(ctx, p.shellExec)
+	if err != nil {
+		return nil, err
 	}
-	return entries, nil
+	if !ok && state != "" {
+		p.logger.Warn().Str("state", state).Msg("Snapshot problem")
+	}
+	attrs, err := json.Marshal(map[string]string{"output": output})
+	if err != nil {
+		return nil, err
+	}
+	return []models.Entry{{
+		Config:     p.config,
+		Domain:     "binary_sensor",
+		Payload:    mqttclient.ProblemPayload(ok),
+		Attributes: attrs,
+		Problem:    !ok,
+	}}, nil
 }

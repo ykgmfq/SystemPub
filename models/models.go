@@ -45,22 +45,6 @@ type MqttConfig struct {
 	JsonAttributesTopic string `json:"json_attributes_topic,omitempty"`
 }
 
-// ZFS pool properties
-type Property int
-
-const (
-	Health Property = iota
-	Snaphots
-	Capacity
-)
-
-// map property to string
-var PropStr = map[Property]string{
-	Health:   "health",
-	Snaphots: "snapshots",
-	Capacity: "capacity",
-}
-
 // Ouput of `hostnamectl` command
 type Hostnamectl struct {
 	Hostname                  string `json:"Hostname"`

@@ -12,9 +12,9 @@ type commandExecutor interface {
 	Output() ([]byte, error)
 }
 
-// SanoidProvider checks pool health, capacity and snapshots via the sanoid CLI.
+// SanoidProvider checks snapshot freshness via the sanoid CLI.
 type SanoidProvider struct {
-	configs   map[models.Property]models.MqttConfig
+	config    models.MqttConfig
 	shellExec func(context.Context, string, ...string) commandExecutor
 	logger    zerolog.Logger
 }

@@ -43,51 +43,51 @@ func (m *MockCommandExecutor) Output() ([]byte, error) {
 	return m.output, m.err
 }
 
-func TestGetPoolStateOK(t *testing.T) {
+func TestGetSnapshotStateOK(t *testing.T) {
 	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor { return &MockCommandExecutor{} }
-	result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+	result, _, _, err := getSnapshotState(context.Background(), mockRun)
 	assert.NoError(t, err, "Expected no error on clean exit")
-	assert.True(t, result, "Expected pool state to be true on clean exit")
+	assert.True(t, result, "Expected snapshot state to be true on clean exit")
 }
 
-func TestGetPoolStatePoolProblem(t *testing.T) {
+func TestGetSnapshotStatePoolProblem(t *testing.T) {
 	for exitcode := 1; exitcode <= 4; exitcode++ {
 		sanoidErr := makeExitError(exitcode)
 		assert.NotNil(t, sanoidErr, "Failed to create exit error for code %d", exitcode)
 		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
 			return &MockCommandExecutor{err: sanoidErr}
 		}
-		result, state, _, err := getPoolState(context.Background(), mockRun, models.Health)
+		result, state, _, err := getSnapshotState(context.Background(), mockRun)
 		assert.NoError(t, err, "Expected no error on exit codes 1-4")
-		assert.False(t, result, "Expected pool state to be false on exit codes 1-4")
+		assert.False(t, result, "Expected snapshot state to be false on exit codes 1-4")
 		assert.NotEmpty(t, state, "Expected a state name for exit code %d", exitcode)
 	}
 }
 
-func TestGetPoolStateSanoidProblem(t *testing.T) {
+func TestGetSnapshotStateSanoidProblem(t *testing.T) {
 	for _, testerr := range []error{makeExitError(255), makeExitError(5), exec.ErrNotFound} {
 		mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
 			return &MockCommandExecutor{err: testerr}
 		}
-		result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+		result, _, _, err := getSnapshotState(context.Background(), mockRun)
 		assert.ErrorIs(t, err, testerr, "Expected error to be escalated")
-		assert.False(t, result, "Expected pool state to be false on sanoid problem")
+		assert.False(t, result, "Expected snapshot state to be false on sanoid problem")
 	}
 }
 
-func TestGetPoolStateKilled(t *testing.T) {
+func TestGetSnapshotStateKilled(t *testing.T) {
 	killedErr := makeKilledError(t)
 	assert.Equal(t, -1, killedErr.ExitCode())
 	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
 		return &MockCommandExecutor{err: killedErr}
 	}
-	result, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+	result, _, _, err := getSnapshotState(context.Background(), mockRun)
 	assert.ErrorIs(t, err, killedErr, "Expected killed-process error to be escalated")
 	assert.False(t, result)
 }
 
-// Pool problems must reach the logger handed to the provider, so they show up in the service log.
-func TestEntriesLogsPoolProblem(t *testing.T) {
+// Snapshot problems must reach the logger handed to the provider, so they show up in the service log.
+func TestEntriesLogsSnapshotProblem(t *testing.T) {
 	sanoidErr := makeExitError(2)
 	require.NotNil(t, sanoidErr)
 	var buf bytes.Buffer
@@ -102,13 +102,13 @@ func TestEntriesLogsPoolProblem(t *testing.T) {
 }
 
 // A broken sanoid explains itself on stderr, which must reach the log so the cause is obvious.
-func TestGetPoolStateErrorIncludesStderr(t *testing.T) {
+func TestGetSnapshotStateErrorIncludesStderr(t *testing.T) {
 	_, sanoidErr := exec.Command("sh", "-c", "echo 'could not read config' >&2; exit 255").Output()
 	require.Error(t, sanoidErr)
 	mockRun := func(_ context.Context, _ string, _ ...string) commandExecutor {
 		return &MockCommandExecutor{err: sanoidErr}
 	}
-	_, _, _, err := getPoolState(context.Background(), mockRun, models.Health)
+	_, _, _, err := getSnapshotState(context.Background(), mockRun)
 	assert.ErrorIs(t, err, sanoidErr)
 	assert.ErrorContains(t, err, "could not read config")
 }
