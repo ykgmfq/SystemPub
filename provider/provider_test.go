@@ -22,7 +22,7 @@ func (f fakeProvider) Entries(context.Context) ([]models.Entry, error) {
 	return f.entries, f.err
 }
 
-func entry(uid, domain string, problem bool, attrs []byte) models.Entry {
+func entry(uid string, domain models.Domain, problem bool, attrs []byte) models.Entry {
 	return models.Entry{
 		Config: models.MqttConfig{
 			UniqueID:            uid,
@@ -45,13 +45,13 @@ func topics(msgs []*paho.Publish) []string {
 }
 
 func TestDiscoveryMessagesUseDomain(t *testing.T) {
-	msgs, err := discoveryMessages([]models.Entry{entry("a", "binary_sensor", false, nil), entry("b", "sensor", false, nil)})
+	msgs, err := discoveryMessages([]models.Entry{entry("a", models.BinarySensor, false, nil), entry("b", models.Sensor, false, nil)})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"homeassistant/binary_sensor/a/config", "homeassistant/sensor/b/config"}, topics(msgs))
 }
 
 func TestStateMessagesIncludeAttributesOnlyWhenPresent(t *testing.T) {
-	msgs := stateMessages([]models.Entry{entry("a", "binary_sensor", false, []byte("{}")), entry("b", "sensor", false, nil)})
+	msgs := stateMessages([]models.Entry{entry("a", models.BinarySensor, false, []byte("{}")), entry("b", models.Sensor, false, nil)})
 	assert.Equal(t, []string{"state/a", "attrs/a", "state/b"}, topics(msgs))
 	for _, m := range msgs {
 		assert.True(t, m.Retain)
@@ -60,8 +60,8 @@ func TestStateMessagesIncludeAttributesOnlyWhenPresent(t *testing.T) {
 
 func TestHasProblem(t *testing.T) {
 	assert.False(t, hasProblem(nil))
-	assert.False(t, hasProblem([]models.Entry{entry("a", "sensor", false, nil)}))
-	assert.True(t, hasProblem([]models.Entry{entry("a", "sensor", false, nil), entry("b", "binary_sensor", true, nil)}))
+	assert.False(t, hasProblem([]models.Entry{entry("a", models.Sensor, false, nil)}))
+	assert.True(t, hasProblem([]models.Entry{entry("a", models.Sensor, false, nil), entry("b", models.BinarySensor, true, nil)}))
 }
 
 func TestNextInterval(t *testing.T) {
@@ -75,9 +75,9 @@ func TestNextInterval(t *testing.T) {
 func TestServeDiscovery(t *testing.T) {
 	pubs := make(chan *paho.Publish, 16)
 	server := NewServer("test", pubs, time.Hour, zerolog.Nop(),
-		fakeProvider{entries: []models.Entry{entry("a", "binary_sensor", false, []byte("{}"))}},
+		fakeProvider{entries: []models.Entry{entry("a", models.BinarySensor, false, []byte("{}"))}},
 		fakeProvider{err: errors.New("broken")},
-		fakeProvider{entries: []models.Entry{entry("b", "sensor", false, nil)}},
+		fakeProvider{entries: []models.Entry{entry("b", models.Sensor, false, nil)}},
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

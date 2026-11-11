@@ -42,22 +42,23 @@ func getTlsConfig() (*tls.Config, error) {
 	return &tlsConfig, nil
 }
 
-// Returns a discovery message for a given sensor
-func GetDiscovery(config models.MqttConfig) (*paho.Publish, error) {
-	payload, err := json.Marshal(config)
-	if err != nil {
-		return nil, err
-	}
-	return &paho.Publish{
-		QoS:     1,
-		Retain:  true,
-		Topic:   "homeassistant/binary_sensor/" + config.UniqueID + "/config",
-		Payload: payload,
-	}, nil
+// Returns the topic below which Home Assistant expects all messages for the given sensor.
+func sensorTopic(domain models.Domain, uniqueID string) string {
+	return discoveryPrefix + "/" + string(domain) + "/" + uniqueID
 }
 
-// Returns a discovery message for a numeric sensor entity
-func GetSensorDiscovery(config models.MqttConfig) (*paho.Publish, error) {
+// StateTopic returns the topic that carries the state of the given sensor.
+func StateTopic(domain models.Domain, uniqueID string) string {
+	return sensorTopic(domain, uniqueID) + "/state"
+}
+
+// AttributesTopic returns the topic that carries the attributes of the given sensor.
+func AttributesTopic(domain models.Domain, uniqueID string) string {
+	return sensorTopic(domain, uniqueID) + "/attributes"
+}
+
+// GetDiscovery returns the discovery message that announces the given sensor to Home Assistant.
+func GetDiscovery(domain models.Domain, config models.MqttConfig) (*paho.Publish, error) {
 	payload, err := json.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func GetSensorDiscovery(config models.MqttConfig) (*paho.Publish, error) {
 	return &paho.Publish{
 		QoS:     1,
 		Retain:  true,
-		Topic:   "homeassistant/sensor/" + config.UniqueID + "/config",
+		Topic:   sensorTopic(domain, config.UniqueID) + "/config",
 		Payload: payload,
 	}, nil
 }
@@ -114,7 +115,7 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 		client.logger.Info().Msg("Connected to MQTT server")
 		sub := &paho.Subscribe{
 			Subscriptions: []paho.SubscribeOptions{
-				{Topic: "homeassistant/status", QoS: 1},
+				{Topic: statusTopic, QoS: 1},
 			},
 		}
 		if _, err := cm.Subscribe(context.Background(), sub); err != nil {
@@ -126,7 +127,7 @@ func (client Mqttclient) buildClientConfig(tlsConfig *tls.Config) autopaho.Clien
 
 	onpub := func(pr paho.PublishReceived) (bool, error) {
 		client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
-		if pr.Packet.Topic == "homeassistant/status" && string(pr.Packet.Payload) == "online" {
+		if pr.Packet.Topic == statusTopic && string(pr.Packet.Payload) == "online" {
 			client.logger.Info().Msg("Homeassistant is online")
 			client.notifyListeners(true)
 		}
