@@ -43,6 +43,6 @@ deb:
     dpkg-buildpackage --build=binary --no-sign -d
     echo "Built $(ls "$srcdir"/../systempub_*.deb)"
 
-# update the devcontianer to the latest Go version
+# update the devcontainer to the latest Go version
 update-devcontainer:
     bash .github/scripts/update-devcontainer.sh

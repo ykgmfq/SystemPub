@@ -38,8 +38,7 @@ const (
 	zfsInterval     = 20 * time.Minute
 )
 
-// Reads the MQTT password from systemd credentials directory
-// Falls back to the password in the config if credential is not available
+// loadMQTTPassword reads the MQTT password from the systemd credentials directory, if one is set.
 func loadMQTTPassword() (string, error) {
 	credDir := os.Getenv("CREDENTIALS_DIRECTORY")
 	if credDir == "" {
@@ -52,7 +51,7 @@ func loadMQTTPassword() (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// Reads the configuration file and returns the application configuration.
+// readConfig reads the application configuration from the given file.
 func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
 	file, err := os.Open(location)
@@ -73,7 +72,7 @@ func readConfig(location string, logger zerolog.Logger) (models.SystemPubConfig,
 	return config, nil
 }
 
-// Returns the configuration with the password from the credentials directory, which takes precedence over the configuration file.
+// withPassword returns the configuration with the password from the credentials directory, which takes precedence over the configuration file.
 func withPassword(config models.SystemPubConfig, logger zerolog.Logger) (models.SystemPubConfig, error) {
 	password, err := loadMQTTPassword()
 	if err != nil {
@@ -89,7 +88,7 @@ func withPassword(config models.SystemPubConfig, logger zerolog.Logger) (models.
 	return config, nil
 }
 
-// Returns the configuration with the server host given on the command line, if any.
+// withHost returns the configuration with the server host given on the command line, if any.
 func withHost(config models.SystemPubConfig, host string) (models.SystemPubConfig, error) {
 	if host == "" {
 		return config, nil
@@ -102,7 +101,7 @@ func withHost(config models.SystemPubConfig, host string) (models.SystemPubConfi
 	return config, nil
 }
 
-// Assembles the configuration from the configuration file, the credentials directory and the command line.
+// loadConfig assembles the configuration from the file, the credentials directory and the command line.
 func loadConfig(configPath, host string, debug bool, logger zerolog.Logger) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
 	if configPath != "" {
@@ -122,7 +121,7 @@ func loadConfig(configPath, host string, debug bool, logger zerolog.Logger) (mod
 	return withHost(config, host)
 }
 
-// Returns the providers of the systemd and ZFS sensor groups.
+// newProviders returns the providers of the systemd and ZFS sensor groups.
 // Providers that do not work on this host are logged and left out.
 // The returned function releases the resources held by the providers.
 func newProviders(ctx context.Context, dev models.Device, logger, baseLogger zerolog.Logger) (systemdProviders, zfsProviders []provider.Provider, closeAll func()) {
@@ -149,7 +148,7 @@ func newProviders(ctx context.Context, dev models.Device, logger, baseLogger zer
 	return systemdProviders, zfsProviders, closeAll
 }
 
-// Returns one server per sensor group.
+// newServers returns one server per sensor group.
 // Servers without providers are left out, because the MQTT client waits for every connection listener.
 func newServers(pubs chan *paho.Publish, logger zerolog.Logger, systemdProviders, zfsProviders []provider.Provider) []provider.Server {
 	var servers []provider.Server
@@ -162,7 +161,7 @@ func newServers(pubs chan *paho.Publish, logger zerolog.Logger, systemdProviders
 	return servers
 }
 
-// Returns the systemd status text for the given MQTT connection state.
+// connectionStatus returns the systemd status text for the given MQTT connection state.
 func connectionStatus(connected bool) string {
 	if connected {
 		return "STATUS=Connected to MQTT server"
@@ -170,7 +169,7 @@ func connectionStatus(connected bool) string {
 	return "STATUS=Disconnected from MQTT server"
 }
 
-// Sends the given state to systemd.
+// notify sends the given state to systemd.
 // A failed notification is logged rather than escalated, because the service keeps working without it.
 func notify(state string, logger zerolog.Logger) {
 	if _, err := daemon.SdNotify(false, state); err != nil {
@@ -178,7 +177,7 @@ func notify(state string, logger zerolog.Logger) {
 	}
 }
 
-// Reports readiness and connection status to systemd and pets the watchdog when one is configured.
+// watchdog reports readiness and connection status to systemd and pets the watchdog when one is configured.
 // It keeps consuming connection updates even without a watchdog, because the MQTT client blocks until every listener has received them.
 func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 	watchTime, err := daemon.SdWatchdogEnabled(false)
@@ -204,7 +203,7 @@ func watchdog(ctx context.Context, conn chan bool, logger zerolog.Logger) {
 	}
 }
 
-// Sets up the sensors and runs them until a signal arrives or the MQTT client fails.
+// run sets up the sensors and runs them until a signal arrives or the MQTT client fails.
 // It returns only after every routine has stopped and all resources have been released.
 func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	logger := baseLogger.With().Str("mod", "main").Logger()
@@ -264,6 +263,7 @@ func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	return nil
 }
 
+// main parses the command line and runs SystemPub.
 func main() {
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	configPath := flag.String("config", "/etc/systempub.yaml", "Config file")

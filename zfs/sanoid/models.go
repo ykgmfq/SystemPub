@@ -8,6 +8,7 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 )
 
+// commandExecutor is the part of an external command that the provider needs, so that tests can replace it.
 type commandExecutor interface {
 	Output() ([]byte, error)
 }

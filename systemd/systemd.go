@@ -1,5 +1,3 @@
-// Provides checks for the state of systemd units.
-// Also used to query the properties of the client host device
 package systemd
 
 import (
@@ -14,7 +12,7 @@ import (
 	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
-// Returns a MqttConfig for the systemd units binary sensor.
+// getUnitConfig returns the configuration of the failed units binary sensor.
 func getUnitConfig(device models.Device, interval time.Duration) models.MqttConfig {
 	unique_id := mqttclient.NormalizeStr(device.Name) + "_units"
 	stateTopic := mqttclient.StateTopic(models.BinarySensor, unique_id)
@@ -22,7 +20,7 @@ func getUnitConfig(device models.Device, interval time.Duration) models.MqttConf
 	return models.MqttConfig{Name: "Systemd units", StateTopic: stateTopic, JsonAttributesTopic: attrTopic, DeviceClass: "problem", UniqueID: unique_id, Device: device, ExpireAfter: int((interval * 2).Seconds()), ForceUpdate: true}
 }
 
-// Returns the client device properties.
+// GetDevice returns the properties of the host device.
 func GetDevice(ctx context.Context) (models.Device, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -55,7 +53,7 @@ func (p *UnitProvider) Close() {
 	p.conn.Close()
 }
 
-// Returns the sensor entry for the given list of failed units.
+// unitEntry returns the sensor entry for the given list of failed units.
 func unitEntry(config models.MqttConfig, failedUnits []string) (models.Entry, error) {
 	attrs, err := json.Marshal(map[string][]string{"failed_units": failedUnits})
 	if err != nil {

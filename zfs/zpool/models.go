@@ -7,12 +7,14 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 )
 
+// zpoolExecutor is the part of an external command that the provider needs, so that tests can replace it.
 type zpoolExecutor interface {
 	Output() ([]byte, error)
 }
 
 // JSON structs for `zpool status -j --json-int`
 
+// scanStats is the scrub state of a pool.
 type scanStats struct {
 	Function  string `json:"function"`
 	State     string `json:"state"`
@@ -21,6 +23,7 @@ type scanStats struct {
 	Errors    int    `json:"errors"`
 }
 
+// vdev is a virtual device of a pool, either a group of devices or a leaf such as a disk.
 type vdev struct {
 	Name           string           `json:"name"`
 	VdevType       string           `json:"vdev_type"`
@@ -36,6 +39,7 @@ type vdev struct {
 	Vdevs          map[string]*vdev `json:"vdevs"`
 }
 
+// zpoolPool is the status of one pool.
 type zpoolPool struct {
 	Name       string           `json:"name"`
 	State      string           `json:"state"`
@@ -46,6 +50,7 @@ type zpoolPool struct {
 	Vdevs      map[string]*vdev `json:"vdevs"`
 }
 
+// zpoolStatus is the top-level `zpool status` output.
 type zpoolStatus struct {
 	Pools map[string]*zpoolPool `json:"pools"`
 }

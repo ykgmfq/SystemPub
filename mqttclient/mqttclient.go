@@ -1,4 +1,3 @@
-// Provides a MQTT client for Home Assistant sensors.
 package mqttclient
 
 import (
@@ -18,12 +17,12 @@ import (
 	"github.com/ykgmfq/SystemPub/models"
 )
 
-// Replace invalid characters and convert to lowercase for MQTT compatibility
+// NormalizeStr makes a string usable in MQTT topics and Home Assistant IDs.
 func NormalizeStr(input string) string {
 	return invalidChars.ReplaceAllString(strings.ToLower(input), "-")
 }
 
-// Returns a MQTT client instance with initialized channels
+// NewMqttclient returns a client with initialized channels.
 func NewMqttclient(server models.MQTT, device models.Device, logger zerolog.Logger) Mqttclient {
 	return Mqttclient{
 		Server:        server,
@@ -34,6 +33,7 @@ func NewMqttclient(server models.MQTT, device models.Device, logger zerolog.Logg
 	}
 }
 
+// getTlsConfig returns a TLS configuration that trusts the system certificate authorities.
 func getTlsConfig() (*tls.Config, error) {
 	rootCAPool, err := x509.SystemCertPool()
 	if err != nil {
@@ -43,7 +43,7 @@ func getTlsConfig() (*tls.Config, error) {
 	return &tlsConfig, nil
 }
 
-// Returns the topic below which Home Assistant expects all messages for the given sensor.
+// sensorTopic returns the topic below which Home Assistant expects all messages for the given sensor.
 func sensorTopic(domain models.Domain, uniqueID string) string {
 	return discoveryPrefix + "/" + string(domain) + "/" + uniqueID
 }
@@ -72,7 +72,8 @@ func GetDiscovery(domain models.Domain, config models.MqttConfig) (*paho.Publish
 	}, nil
 }
 
-// Sensor payload for problem type. Note the inverted logic!
+// ProblemPayload returns the payload of a problem sensor.
+// The logic is inverted: a sensor that is ok is off.
 func ProblemPayload(ok bool) []byte {
 	payload := map[bool][]byte{
 		true:  []byte("OFF"),
@@ -91,10 +92,10 @@ func (l levelLogger) Printf(format string, v ...any) {
 	l.logger.WithLevel(l.level).Msg(fmt.Sprintf(format, v...))
 }
 
-// Handles client-side errors.
+// clientError logs errors on the client side.
 func (client Mqttclient) clientError(err error) { client.logger.Error().Err(err).Msg("Client error") }
 
-// Handles server disconnects.
+// serverDis logs a disconnect requested by the server.
 func (client Mqttclient) serverDis(d *paho.Disconnect) {
 	event := client.logger.Info().Uint8("reason code", uint8(d.ReasonCode))
 	if d.Properties != nil {
@@ -103,7 +104,7 @@ func (client Mqttclient) serverDis(d *paho.Disconnect) {
 	event.Msg("Server requested disconnect")
 }
 
-// Notifies all registered listeners about the connection status to Home Assitant.
+// notifyListeners notifies all registered listeners about the connection status to Home Assistant.
 // It gives up once the context ends, because listeners stop receiving at shutdown.
 func (client Mqttclient) notifyListeners(ctx context.Context, connected bool) {
 	for _, listener := range client.ConnListeners {
@@ -115,7 +116,7 @@ func (client Mqttclient) notifyListeners(ctx context.Context, connected bool) {
 	}
 }
 
-// Subscribes to the Home Assistant status topic whenever the connection comes up, so that discovery can be repeated after Home Assistant restarts.
+// onConnectionUp subscribes to the Home Assistant status topic whenever the connection comes up, so that discovery can be repeated after Home Assistant restarts.
 func (client Mqttclient) onConnectionUp(ctx context.Context, cm *autopaho.ConnectionManager) {
 	client.logger.Info().Msg("Connected to MQTT server")
 	sub := &paho.Subscribe{
@@ -133,7 +134,7 @@ func (client Mqttclient) onConnectionUp(ctx context.Context, cm *autopaho.Connec
 	client.notifyListeners(ctx, true)
 }
 
-// Treats Home Assistant coming online like a new connection, so that it receives discovery again.
+// onPublishReceived treats Home Assistant coming online like a new connection, so that it receives discovery again.
 func (client Mqttclient) onPublishReceived(ctx context.Context, pr paho.PublishReceived) (bool, error) {
 	client.logger.Debug().Interface("msg", &pr.Packet).Msg("Received message")
 	if pr.Packet.Topic == statusTopic && string(pr.Packet.Payload) == "online" {
@@ -143,18 +144,18 @@ func (client Mqttclient) onPublishReceived(ctx context.Context, pr paho.PublishR
 	return true, nil
 }
 
-// Handles failed connection attempts.
+// onConnectError reports a failed connection attempt to the listeners and the log.
 func (client Mqttclient) onConnectError(ctx context.Context, err error) {
 	client.notifyListeners(ctx, false)
 	client.logger.Error().Err(err).Msg("Connection attempt failed")
 }
 
-// Logs every outgoing message.
+// onPublished logs every outgoing message.
 func (client Mqttclient) onPublished(p *paho.Publish) {
 	client.logger.Debug().Str("topic", p.Topic).Msg("Published message")
 }
 
-// Returns the configured user name, or one derived from the device name.
+// username returns the configured user name, or one derived from the device name.
 func username(server models.MQTT, device models.Device) string {
 	if server.User != "" {
 		return server.User
@@ -162,12 +163,12 @@ func username(server models.MQTT, device models.Device) string {
 	return fmt.Sprintf("systemPub@%s", device.Name)
 }
 
-// Returns a client ID that is unique per host.
+// clientID returns a client ID that is unique per host.
 func clientID(device models.Device) string {
 	return fmt.Sprintf("systemPub@%s_%s", device.Name, device.Identifiers[0][:4])
 }
 
-// buildClientConfig constructs the autopaho client configuration with all callbacks.
+// buildClientConfig returns the autopaho configuration with all callbacks.
 // The callbacks run under the given context, so that they stop together with the connection.
 func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.Config) autopaho.ClientConfig {
 	// The library reports errors and debug output on separate streams, which are mapped to the matching log levels.
@@ -201,7 +202,7 @@ func (client Mqttclient) buildClientConfig(ctx context.Context, tlsConfig *tls.C
 	}
 }
 
-// Creates a new MQTT connection with the given configuration.
+// createConnection opens the connection to the MQTT server, using TLS for the secure schemes.
 func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.ConnectionManager, error) {
 	var tlsConfig *tls.Config
 	if client.Server.Host.Scheme == "wss" || client.Server.Host.Scheme == "mqtts" {
@@ -219,7 +220,7 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 	return autopaho.NewConnection(ctx, cfg)
 }
 
-// Long-running routine that handles the MQTT connection and publishes messages.
+// Serve handles the MQTT connection and publishes queued messages until the context ends.
 // It returns nil when the context is cancelled and an error when publishing can no longer continue.
 // Either way, it returns only after the connection has been closed cleanly or the attempt has timed out.
 func (client Mqttclient) Serve(ctx context.Context) error {
@@ -236,7 +237,7 @@ func (client Mqttclient) Serve(ctx context.Context) error {
 	return errors.Join(err, awaitShutdown(connManage))
 }
 
-// Publishes queued messages until the context ends.
+// publishLoop publishes queued messages until the context ends.
 func (client Mqttclient) publishLoop(ctx context.Context, cm *autopaho.ConnectionManager) error {
 	for {
 		select {
@@ -253,7 +254,7 @@ func (client Mqttclient) publishLoop(ctx context.Context, cm *autopaho.Connectio
 	}
 }
 
-// Waits for the connection manager to finish closing the connection.
+// awaitShutdown waits for the connection manager to finish closing the connection.
 func awaitShutdown(cm *autopaho.ConnectionManager) error {
 	select {
 	case <-cm.Done():
@@ -263,7 +264,7 @@ func awaitShutdown(cm *autopaho.ConnectionManager) error {
 	}
 }
 
-// Publishes one message, bounded by its own deadline so that a stalled acknowledgement does not hold up the queue.
+// publish publishes one message, bounded by its own deadline so that a stalled acknowledgement does not hold up the queue.
 func publish(ctx context.Context, cm *autopaho.ConnectionManager, pub *paho.Publish) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()

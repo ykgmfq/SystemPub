@@ -23,8 +23,6 @@ Run the driver:
 bash .claude/skills/refresh-copr-token/refresh.sh
 ```
 
-It mints a new token with `copr-cli new-api-token` (which rewrites `~/.config/copr` in place), verifies it with `copr-cli whoami`, and uploads the new config with `gh secret set COPR_CONFIG`.
-
 Prerequisites the driver assumes:
 
 - A valid, unexpired token in `~/.config/copr` (the old token is used to mint the new one).

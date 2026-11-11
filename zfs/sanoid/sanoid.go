@@ -15,7 +15,7 @@ import (
 	"github.com/ykgmfq/SystemPub/mqttclient"
 )
 
-// Maps Sanoid exit codes to human-readable states.
+// sanoidState maps a sanoid exit code to a human-readable state.
 func sanoidState(exit int) string {
 	if exit > 4 || exit < 0 {
 		return "UNKNOWN"
@@ -30,7 +30,7 @@ func sanoidState(exit int) string {
 	return sanoidExitLevels[exit]
 }
 
-// Runs sanoid to check snapshot freshness.
+// getSnapshotState runs sanoid to check snapshot freshness.
 // Returns (ok, state, output, err): state is non-empty when exit code 1-4 (snapshot problem, sanoid healthy).
 func getSnapshotState(ctx context.Context, run func(context.Context, string, ...string) commandExecutor) (bool, string, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -74,6 +74,7 @@ func NewSanoidProvider(ctx context.Context, device models.Device, interval time.
 	return p, nil
 }
 
+// newSanoidProvider returns a provider that runs the real sanoid command.
 func newSanoidProvider(device models.Device, interval time.Duration, logger zerolog.Logger) *SanoidProvider {
 	return &SanoidProvider{
 		config: GetSnapshotConfig(device, interval),

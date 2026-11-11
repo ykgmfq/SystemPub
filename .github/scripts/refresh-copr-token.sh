@@ -2,8 +2,7 @@
 set -eu
 
 # Rotates the COPR API token and writes the new config back into the
-# COPR_CONFIG repository secret. The token expires after 180 days, so
-# the refresh workflow runs this monthly for a comfortable margin.
+# COPR_CONFIG repository secret.
 #
 # Requires COPR_CONFIG (the current config) and GH_TOKEN (a PAT with
 # write access to the repository's Actions secrets) in the environment.

@@ -27,6 +27,7 @@ type levelLogger struct {
 	level  zerolog.Level
 }
 
+// Mqttclient publishes queued messages to the MQTT server and reports the connection state to its listeners.
 type Mqttclient struct {
 	Server        models.MQTT
 	Device        models.Device

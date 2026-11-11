@@ -17,6 +17,7 @@ import (
 
 const gib = float64(1 << 30)
 
+// runZpool runs `zpool status` and parses its output.
 func runZpool(ctx context.Context, exec func(context.Context, string, ...string) zpoolExecutor) (*zpoolStatus, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -34,7 +35,7 @@ func runZpool(ctx context.Context, exec func(context.Context, string, ...string)
 	return &status, nil
 }
 
-// collectLeafVdevs recursively returns vdevs with no children (disks, files, etc.).
+// collectLeafVdevs recursively returns vdevs with no children, such as disks and files.
 func collectLeafVdevs(v *vdev) []*vdev {
 	if len(v.Vdevs) == 0 {
 		return []*vdev{v}
@@ -46,10 +47,12 @@ func collectLeafVdevs(v *vdev) []*vdev {
 	return leaves
 }
 
+// zpoolSensorUID returns the unique ID of a pool sensor.
 func zpoolSensorUID(poolGUID uint64, suffix string) string {
 	return fmt.Sprintf("zpool_%d_%s", poolGUID, suffix)
 }
 
+// zpoolDevice returns the Home Assistant device that represents the pool.
 func zpoolDevice(pool *zpoolPool) models.Device {
 	return models.Device{
 		Name:         pool.Name,
@@ -60,7 +63,7 @@ func zpoolDevice(pool *zpoolPool) models.Device {
 	}
 }
 
-// Returns the config fields shared by every sensor of the pool.
+// config returns the config fields shared by every sensor of the pool.
 func (s poolSensors) config(name, suffix string, domain models.Domain) models.MqttConfig {
 	uid := zpoolSensorUID(s.guid, suffix)
 	return models.MqttConfig{
@@ -73,7 +76,7 @@ func (s poolSensors) config(name, suffix string, domain models.Domain) models.Mq
 	}
 }
 
-// Returns a health binary sensor, which reports a problem unless the state is ONLINE.
+// health returns a health binary sensor, which reports a problem unless the state is ONLINE.
 func (s poolSensors) health(name, suffix, state string, attrs map[string]any) (models.Entry, error) {
 	raw, err := json.Marshal(attrs)
 	if err != nil {
@@ -86,7 +89,7 @@ func (s poolSensors) health(name, suffix, state string, attrs map[string]any) (m
 	return models.Entry{Config: cfg, Domain: models.BinarySensor, Payload: mqttclient.ProblemPayload(ok), Attributes: raw, Problem: !ok}, nil
 }
 
-// Returns a sensor that reports a size in GiB.
+// size returns a sensor that reports a size in GiB.
 func (s poolSensors) size(name, suffix string, bytes int64) models.Entry {
 	cfg := s.config(name, suffix, models.Sensor)
 	cfg.DeviceClass = "data_size"
@@ -95,14 +98,14 @@ func (s poolSensors) size(name, suffix string, bytes int64) models.Entry {
 	return models.Entry{Config: cfg, Domain: models.Sensor, Payload: fmt.Appendf(nil, "%.2f", float64(bytes)/gib)}
 }
 
-// Returns a sensor that reports an ever-growing count, such as errors.
+// counter returns a sensor that reports an ever-growing count, such as errors.
 func (s poolSensors) counter(name, suffix string, n int64) models.Entry {
 	cfg := s.config(name, suffix, models.Sensor)
 	cfg.StateClass = "total_increasing"
 	return models.Entry{Config: cfg, Domain: models.Sensor, Payload: []byte(strconv.FormatInt(n, 10))}
 }
 
-// Returns the scrub details shown as attributes of the pool health sensor.
+// scrubAttributes returns the scrub details shown as attributes of the pool health sensor.
 func scrubAttributes(scan scanStats) map[string]any {
 	m := map[string]any{
 		"scrub_state":    scan.State,
@@ -115,7 +118,7 @@ func scrubAttributes(scan scanStats) map[string]any {
 	return m
 }
 
-// Returns the disk details shown as attributes of the disk health sensor.
+// diskAttributes returns the disk details shown as attributes of the disk health sensor.
 func diskAttributes(leaf *vdev) map[string]any {
 	m := map[string]any{"slow_ios": leaf.SlowIOs}
 	if leaf.Path != "" {
@@ -127,7 +130,7 @@ func diskAttributes(leaf *vdev) map[string]any {
 	return m
 }
 
-// Returns the health sensor and error counters of one disk.
+// diskEntries returns the health sensor and error counters of one disk.
 func diskEntries(s poolSensors, leaf *vdev) ([]models.Entry, error) {
 	key := mqttclient.NormalizeStr(leaf.Name)
 	health, err := s.health(leaf.Name+" health", key+"_health", leaf.State, diskAttributes(leaf))
@@ -185,6 +188,7 @@ func NewZpoolProvider(ctx context.Context, interval time.Duration) (*ZpoolProvid
 	return p, nil
 }
 
+// newZpoolProvider returns a provider that runs the real zpool command.
 func newZpoolProvider(interval time.Duration) *ZpoolProvider {
 	return &ZpoolProvider{
 		interval: interval,

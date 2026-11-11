@@ -78,7 +78,6 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	}
 	guid := pool.PoolGUID
 
-	// Pool health binary_sensor
 	health := byUID[zpoolSensorUID(guid, "health")]
 	assert.Equal(t, models.BinarySensor, health.Domain)
 	assert.Equal(t, "problem", health.Config.DeviceClass)
@@ -86,7 +85,6 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	assert.Equal(t, []byte("OFF"), health.Payload)
 	assert.False(t, health.Problem)
 
-	// Attributes contain scrub fields and ISO timestamps
 	var attrMap map[string]any
 	attrsData := health.Attributes
 	require.NoError(t, json.Unmarshal(attrsData, &attrMap))
@@ -94,7 +92,6 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	assert.Contains(t, attrMap, "scrub_start")
 	assert.Contains(t, attrMap, "scrub_end")
 
-	// Capacity sensors
 	alloc := byUID[zpoolSensorUID(guid, "alloc")]
 	assert.Equal(t, models.Sensor, alloc.Domain)
 	assert.Equal(t, "data_size", alloc.Config.DeviceClass)
@@ -102,12 +99,10 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 	assert.Equal(t, "measurement", alloc.Config.StateClass)
 	assert.Nil(t, alloc.Attributes)
 
-	// Pool error sensor
 	errEntry := byUID[zpoolSensorUID(guid, "errors")]
 	assert.Equal(t, "total_increasing", errEntry.Config.StateClass)
 	assert.Equal(t, []byte("0"), errEntry.Payload)
 
-	// Disk health with attributes
 	diskHealth := byUID[zpoolSensorUID(guid, "sda_health")]
 	assert.Equal(t, models.BinarySensor, diskHealth.Domain)
 	var diskAttrMap map[string]any

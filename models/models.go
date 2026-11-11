@@ -12,11 +12,12 @@ import (
 // The client enables TLS for the secure ones, so other aliases the MQTT library knows are left out.
 var serverSchemes = []string{"mqtt", "mqtts", "ws", "wss"}
 
-// Custom URL type to handle YAML decoding
+// YAMLURL is a URL that validates the MQTT server scheme when decoded from YAML.
 type YAMLURL struct {
 	*url.URL
 }
 
+// UnmarshalYAML decodes and validates a server address.
 func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
 	parsed, err := ParseServerURL(value.Value)
 	if err != nil {
@@ -26,7 +27,7 @@ func (u *YAMLURL) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// Device information for Home Assistant autodiscovery
+// Device describes the host in the Home Assistant device registry.
 type Device struct {
 	Name         string    `json:"name"`
 	Model        string    `json:"model"`
@@ -35,7 +36,7 @@ type Device struct {
 	Identifiers  [1]string `json:"identifiers"`
 }
 
-// Sensor configuration for Home Assistant autodiscovery
+// MqttConfig is the Home Assistant autodiscovery configuration of one sensor.
 type MqttConfig struct {
 	Name                string `json:"name"`
 	DeviceClass         string `json:"device_class,omitempty"`
@@ -49,14 +50,14 @@ type MqttConfig struct {
 	JsonAttributesTopic string `json:"json_attributes_topic,omitempty"`
 }
 
-// MQTT server location and credentials
+// MQTT holds the location and credentials of the MQTT server.
 type MQTT struct {
 	Host     YAMLURL `yaml:"host"`
 	User     string  `yaml:"user"`
 	Password string  `yaml:"password"`
 }
 
-// Application configuration, as read from the configuration file
+// SystemPubConfig is the application configuration.
 type SystemPubConfig struct {
 	MQTTServer MQTT          `yaml:"mqttserver"`
 	Loglevel   zerolog.Level `yaml:"loglevel"`

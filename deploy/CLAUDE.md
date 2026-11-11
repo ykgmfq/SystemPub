@@ -1,7 +1,5 @@
 # Deployment
 
-Packaging artifacts for the RPM (COPR) and Debian (Launchpad PPA) builds, plus the shared systemd unit.
-
 ## Service activation
 
 The service is enabled by default on both distributions.

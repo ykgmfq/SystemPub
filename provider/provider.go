@@ -23,7 +23,7 @@ func NewServer(name string, pubs chan *paho.Publish, interval time.Duration, log
 	}
 }
 
-// Returns the discovery messages for the given entries.
+// discoveryMessages returns the discovery messages for the given entries.
 func discoveryMessages(entries []models.Entry) ([]*paho.Publish, error) {
 	msgs := make([]*paho.Publish, 0, len(entries))
 	for _, e := range entries {
@@ -36,7 +36,7 @@ func discoveryMessages(entries []models.Entry) ([]*paho.Publish, error) {
 	return msgs, nil
 }
 
-// Returns the state and attribute messages for the given entries.
+// stateMessages returns the state and attribute messages for the given entries.
 func stateMessages(entries []models.Entry) []*paho.Publish {
 	msgs := make([]*paho.Publish, 0, 2*len(entries))
 	for _, e := range entries {
@@ -48,7 +48,7 @@ func stateMessages(entries []models.Entry) []*paho.Publish {
 	return msgs
 }
 
-// Reports whether any of the entries signals a problem.
+// hasProblem reports whether any of the entries signals a problem.
 func hasProblem(entries []models.Entry) bool {
 	for _, e := range entries {
 		if e.Problem {
@@ -58,7 +58,7 @@ func hasProblem(entries []models.Entry) bool {
 	return false
 }
 
-// Returns how long to wait before the next check.
+// nextInterval returns how long to wait before the next check.
 func nextInterval(problem bool, interval time.Duration) time.Duration {
 	if problem {
 		return min(problemInterval, interval)
@@ -66,14 +66,14 @@ func nextInterval(problem bool, interval time.Duration) time.Duration {
 	return interval
 }
 
-// Returns the entries of one provider, bounded by its own deadline.
+// providerEntries returns the entries of one provider, bounded by its own deadline.
 func providerEntries(ctx context.Context, p Provider) ([]models.Entry, error) {
 	ctx, cancel := context.WithTimeout(ctx, entriesTimeout)
 	defer cancel()
 	return p.Entries(ctx)
 }
 
-// Collects the entries of all providers.
+// collect gathers the entries of all providers.
 // A failing provider is logged and skipped, so that it does not hold back the others.
 func (s Server) collect(ctx context.Context) []models.Entry {
 	var entries []models.Entry
@@ -88,7 +88,7 @@ func (s Server) collect(ctx context.Context) []models.Entry {
 	return entries
 }
 
-// Hands the messages to the MQTT client.
+// publish hands the messages to the MQTT client.
 // It gives up once the context ends, because the client stops receiving at shutdown.
 func (s Server) publish(ctx context.Context, msgs []*paho.Publish) {
 	for _, msg := range msgs {
@@ -100,7 +100,7 @@ func (s Server) publish(ctx context.Context, msgs []*paho.Publish) {
 	}
 }
 
-// Blocks until the next check is due.
+// wait blocks until the next check is due.
 // It reports whether the check was triggered by a new MQTT connection, which calls for discovery, and returns an error once the context ends.
 func (s Server) wait(ctx context.Context, ticks <-chan time.Time) (bool, error) {
 	for {
@@ -117,7 +117,7 @@ func (s Server) wait(ctx context.Context, ticks <-chan time.Time) (bool, error) 
 	}
 }
 
-// Collects all entries and publishes their state, preceded by discovery messages if requested.
+// update collects all entries and publishes their state, preceded by discovery messages if requested.
 func (s Server) update(ctx context.Context, discover bool) []models.Entry {
 	entries := s.collect(ctx)
 	if discover {
@@ -134,7 +134,7 @@ func (s Server) update(ctx context.Context, discover bool) []models.Entry {
 	return entries
 }
 
-// Switches the ticker between the regular and the problem interval when the problem state changes.
+// adjustInterval switches the ticker between the regular and the problem interval when the problem state changes.
 func (s Server) adjustInterval(ticker *time.Ticker, wasProblem, isProblem bool) {
 	if wasProblem == isProblem {
 		return

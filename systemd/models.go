@@ -13,7 +13,7 @@ type UnitProvider struct {
 	logger zerolog.Logger
 }
 
-// The part of the `hostnamectl --json=short` output that describes the device.
+// hostnamectl holds the part of the `hostnamectl --json=short` output that describes the device.
 type hostnamectl struct {
 	Hostname                  string `json:"Hostname"`
 	OperatingSystemPrettyName string `json:"OperatingSystemPrettyName"`

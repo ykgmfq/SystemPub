@@ -3,11 +3,6 @@ set -eu
 
 # Refreshes the COPR API token and stores the new config as the
 # COPR_CONFIG GitHub Actions secret used by the release workflow.
-#
-# Requires a valid (unexpired) token in ~/.config/copr.
-# If the token has already expired, log in at
-# https://copr.fedorainfracloud.org/api/ in a browser, save the
-# config block to ~/.config/copr, and run this script again.
 
 repo="ykgmfq/SystemPub"
 config="$HOME/.config/copr"

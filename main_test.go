@@ -11,9 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Tests for reading configuration from a file
 func TestReadConfig(t *testing.T) {
-	// Create a temporary configuration file
 	configData := `
 mqttserver:
   host: mqtt://192.168.0.3:8080
@@ -32,8 +30,6 @@ loglevel: warn
 	assert.Equal(t, "mqtt://192.168.0.3:8080", config.MQTTServer.Host.String(), "Host value mismatch")
 	assert.Equal(t, zerolog.WarnLevel, config.Loglevel, "Log level mismatch")
 }
-
-// Tests for loadMQTTPassword
 
 func TestLoadMQTTPassword_NoEnv(t *testing.T) {
 	orig, had := os.LookupEnv("CREDENTIALS_DIRECTORY")
