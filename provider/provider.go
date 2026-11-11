@@ -66,12 +66,19 @@ func nextInterval(problem bool, interval time.Duration) time.Duration {
 	return interval
 }
 
+// Returns the entries of one provider, bounded by its own deadline.
+func providerEntries(ctx context.Context, p Provider) ([]models.Entry, error) {
+	ctx, cancel := context.WithTimeout(ctx, entriesTimeout)
+	defer cancel()
+	return p.Entries(ctx)
+}
+
 // Collects the entries of all providers.
 // A failing provider is logged and skipped, so that it does not hold back the others.
 func (s Server) collect(ctx context.Context) []models.Entry {
 	var entries []models.Entry
 	for _, p := range s.providers {
-		pe, err := p.Entries(ctx)
+		pe, err := providerEntries(ctx, p)
 		if err != nil {
 			s.logger.Error().Err(err).Msg("Provider failed")
 			continue

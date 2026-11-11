@@ -2,6 +2,7 @@ package mqttclient
 
 import (
 	"regexp"
+	"time"
 
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
@@ -13,6 +14,9 @@ const discoveryPrefix = "homeassistant"
 
 // Home Assistant announces itself on this topic when it starts.
 const statusTopic = discoveryPrefix + "/status"
+
+// Upper bound for a single request to the server, so that a stalled connection cannot block the client indefinitely.
+const requestTimeout = 10 * time.Second
 
 // Characters that are not allowed in MQTT topics and Home Assistant IDs.
 var invalidChars = regexp.MustCompile(`[^a-z0-9_-]`)
