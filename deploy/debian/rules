@@ -17,5 +17,11 @@ override_dh_auto_build:
 override_dh_auto_test:
 	go test ./...
 
+# The fire drill fakes problems, so its timer must stay off until the user enables it.
+# The oneshot service is left out, because starting it on install would run a drill.
+override_dh_installsystemd:
+	dh_installsystemd systempub.service
+	dh_installsystemd --no-enable --no-start systempub-firedrill.timer
+
 # The binary is built static and already stripped by the linker flags.
 override_dh_strip override_dh_dwz:

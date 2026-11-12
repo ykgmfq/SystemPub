@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rs/zerolog"
+	"github.com/ykgmfq/SystemPub/firedrill"
 	"github.com/ykgmfq/SystemPub/models"
 	"github.com/ykgmfq/SystemPub/mqttclient"
 	"github.com/ykgmfq/SystemPub/provider"
@@ -33,6 +35,9 @@ const (
 	systemdInterval = 10 * time.Minute
 	zfsInterval     = 20 * time.Minute
 )
+
+// drainTimeout bounds publishing the last queued messages at shutdown, so that an unreachable MQTT server cannot hold up the exit.
+const drainTimeout = 15 * time.Second
 
 // newProviders returns the providers of the systemd and ZFS sensor groups.
 // Providers that do not work on this host are logged and left out.
@@ -74,9 +79,23 @@ func newServers(pubs chan *paho.Publish, logger zerolog.Logger, systemdProviders
 	return servers
 }
 
+// drillChannels returns the channels on which the servers receive fire drills.
+func drillChannels(servers []provider.Server) []chan models.Drill {
+	drills := make([]chan models.Drill, 0, len(servers))
+	for _, server := range servers {
+		drills = append(drills, server.Drills)
+	}
+	return drills
+}
+
 // run sets up the sensors and runs them until a signal arrives or the MQTT client fails.
 // It returns only after every routine has stopped and all resources have been released.
 func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
+	// Without a handler, SIGUSR1 would terminate the process, so the handler is registered before anything else.
+	drillTriggers := make(chan os.Signal, 1)
+	signal.Notify(drillTriggers, syscall.SIGUSR1)
+	defer signal.Stop(drillTriggers)
+
 	logger := baseLogger.With().Str("mod", "main").Logger()
 	cfg, err := service.LoadConfig(configPath, host, debug, logger)
 	if err != nil {
@@ -110,24 +129,37 @@ func run(configPath, host string, debug bool, baseLogger zerolog.Logger) error {
 	}
 	mqttClient.ConnListeners = append(mqttClient.ConnListeners, wdconn)
 
-	var wg sync.WaitGroup
+	// The MQTT client outlives the other routines, so that the messages they queue on their way out are still published.
+	mqttCtx, stopMQTT := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopMQTT()
+	var mqttWG sync.WaitGroup
 	mqttErr := make(chan error, 1)
-	wg.Go(func() {
-		err := mqttClient.Serve(ctx)
+	mqttWG.Go(func() {
+		err := mqttClient.Serve(mqttCtx)
 		mqttErr <- err
 		if err != nil {
 			cancel()
 		}
 	})
+	var wg sync.WaitGroup
 	for _, server := range servers {
 		wg.Go(func() { server.Serve(ctx) })
 	}
 	wg.Go(func() { service.Watchdog(ctx, wdconn, logger) })
+	allProviders := slices.Concat(systemdProviders, zfsProviders)
+	wg.Go(func() {
+		firedrill.Run(ctx, drillTriggers, cfg.FireDrill, allProviders, drillChannels(servers), baseLogger)
+	})
 
 	<-ctx.Done()
 	logger.Info().Msg("Shutting down")
 	service.Notify(daemon.SdNotifyStopping+"\nSTATUS=Shutting down", logger)
 	wg.Wait()
+	// The queue may only be closed once every routine that sends to it has returned.
+	close(mqttClient.Pubs)
+	drainTimer := time.AfterFunc(drainTimeout, stopMQTT)
+	defer drainTimer.Stop()
+	mqttWG.Wait()
 	if err := <-mqttErr; err != nil {
 		return fmt.Errorf("MQTT publisher stopped: %w", err)
 	}

@@ -3,6 +3,7 @@ package models
 
 import (
 	"net/url"
+	"time"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
@@ -60,10 +61,24 @@ type MQTT struct {
 	Password string  `yaml:"password"`
 }
 
+// FireDrill configures how a fire drill fakes a problem, so that the alerting in Home Assistant can be tested.
+type FireDrill struct {
+	Duration   time.Duration `yaml:"duration"`
+	ErrorCount int64         `yaml:"errorcount"`
+}
+
 // SystemPubConfig is the application configuration.
 type SystemPubConfig struct {
 	MQTTServer MQTT          `yaml:"mqttserver"`
 	Loglevel   zerolog.Level `yaml:"loglevel"`
+	FireDrill  FireDrill     `yaml:"firedrill"`
+}
+
+// Drill tells a sensor server which sensor to report as failing, and until when.
+type Drill struct {
+	UniqueID   string
+	Until      time.Time
+	ErrorCount int64
 }
 
 // Domain is the Home Assistant entity type a sensor is published as.

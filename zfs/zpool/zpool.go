@@ -102,6 +102,8 @@ func (s poolSensors) size(name, suffix string, bytes int64) models.Entry {
 func (s poolSensors) counter(name, suffix string, n int64) models.Entry {
 	cfg := s.config(name, suffix, models.Sensor)
 	cfg.StateClass = "total_increasing"
+	// Counters have no attributes of their own, but carry the fire drill flag.
+	cfg.JsonAttributesTopic = mqttclient.AttributesTopic(models.Sensor, cfg.UniqueID)
 	return models.Entry{Config: cfg, Domain: models.Sensor, Payload: []byte(strconv.FormatInt(n, 10))}
 }
 

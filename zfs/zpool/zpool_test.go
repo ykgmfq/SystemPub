@@ -101,6 +101,7 @@ func TestBuildPoolEntriesHealthy(t *testing.T) {
 
 	errEntry := byUID[zpoolSensorUID(guid, "errors")]
 	assert.Equal(t, "total_increasing", errEntry.Config.StateClass)
+	assert.NotEmpty(t, errEntry.Config.JsonAttributesTopic)
 	assert.Equal(t, []byte("0"), errEntry.Payload)
 
 	diskHealth := byUID[zpoolSensorUID(guid, "sda_health")]

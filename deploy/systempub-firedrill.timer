@@ -1,0 +1,9 @@
+[Unit]
+Description=SystemPub fire drill to test alerts.
+Documentation=https://github.com/ykgmfq/SystemPub
+
+[Timer]
+OnCalendar=Sat 11:00
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Make SystemPub fake a problem on one sensor to test Home Assistant alerts.
+Documentation=https://github.com/ykgmfq/SystemPub
+# If SystemPub is not running, this unit fails, which is itself worth an alert.
+Requisite=systempub.service
+After=systempub.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl kill --signal=SIGUSR1 --kill-whom=main systempub.service

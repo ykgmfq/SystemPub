@@ -200,9 +200,9 @@ func (client Mqttclient) createConnection(ctx context.Context) (*autopaho.Connec
 	return autopaho.NewConnection(ctx, cfg)
 }
 
-// Serve handles the MQTT connection and publishes queued messages until the context ends.
-// It returns nil when the context is cancelled and an error when publishing can no longer continue.
-// Either way, it returns only after the connection has been closed cleanly or the attempt has timed out.
+// Serve handles the MQTT connection and publishes queued messages until the queue is closed or the context ends.
+// Closing the queue is the graceful way to stop, because every message queued before it is still published.
+// It returns only after the connection has been closed cleanly or the attempt has timed out.
 func (client Mqttclient) Serve(ctx context.Context) error {
 	mqttctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -210,22 +210,22 @@ func (client Mqttclient) Serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create MQTT connection: %w", err)
 	}
-	err = client.publishLoop(mqttctx, connManage)
+	client.publishLoop(mqttctx, connManage)
 	// Cancelling the connection's context makes autopaho send a disconnect to the server.
 	cancel()
 	client.logger.Info().Msg("Disconnecting from MQTT server")
-	return errors.Join(err, awaitShutdown(connManage))
+	return awaitShutdown(connManage)
 }
 
-// publishLoop publishes queued messages until the context ends.
-func (client Mqttclient) publishLoop(ctx context.Context, cm *autopaho.ConnectionManager) error {
+// publishLoop publishes queued messages until the queue is closed or the context ends.
+func (client Mqttclient) publishLoop(ctx context.Context, cm *autopaho.ConnectionManager) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case pub, ok := <-client.Pubs:
 			if !ok {
-				return errors.New("MQTT work channel closed")
+				return
 			}
 			if err := publish(ctx, cm, pub); err != nil {
 				client.logger.Error().Err(err).Msg("Failed to publish")

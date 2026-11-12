@@ -1,1 +1,2 @@
 enable systempub.service
+disable systempub-firedrill.timer
