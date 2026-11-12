@@ -1,2 +1,4 @@
 systempub usr/bin
 deploy/systempub.service usr/lib/systemd/system
+deploy/systempub-firedrill.service usr/lib/systemd/system
+deploy/systempub-firedrill.timer usr/lib/systemd/system

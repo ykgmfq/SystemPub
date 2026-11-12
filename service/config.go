@@ -105,6 +105,17 @@ func withHost(config models.SystemPubConfig, host string) (models.SystemPubConfi
 	return config, nil
 }
 
+// validateDrill rejects fire drill settings that could not fake a problem.
+func validateDrill(config models.SystemPubConfig) (models.SystemPubConfig, error) {
+	if config.FireDrill.Duration <= 0 {
+		return config, fmt.Errorf("fire drill duration must be positive, got %s", config.FireDrill.Duration)
+	}
+	if config.FireDrill.ErrorCount <= 0 {
+		return config, fmt.Errorf("fire drill error count must be positive, got %d", config.FireDrill.ErrorCount)
+	}
+	return config, nil
+}
+
 // LoadConfig assembles the configuration from the file, the credentials directory and the command line.
 func LoadConfig(configPath, host string, debug bool, logger zerolog.Logger) (models.SystemPubConfig, error) {
 	config := models.SystemPubConfigDefault()
@@ -121,6 +132,10 @@ func LoadConfig(configPath, host string, debug bool, logger zerolog.Logger) (mod
 	}
 	if debug {
 		config.Loglevel = zerolog.DebugLevel
+	}
+	config, err = validateDrill(config)
+	if err != nil {
+		return config, err
 	}
 	return withHost(config, host)
 }

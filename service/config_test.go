@@ -4,9 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/ykgmfq/SystemPub/models"
 )
 
 func TestReadConfig(t *testing.T) {
@@ -84,6 +87,37 @@ func TestLoadMQTTPassword_FileMissing(t *testing.T) {
 	pw, err := loadMQTTPassword()
 	assert.Error(t, err)
 	assert.Equal(t, "", pw)
+}
+
+// TestFireDrillConfig checks that fire drill settings fall back to the defaults field by field and that settings which cannot fake a problem are rejected.
+func TestFireDrillConfig(t *testing.T) {
+	dir := t.TempDir()
+	cases := []struct {
+		name    string
+		content string
+		want    models.FireDrill
+		wantErr bool
+	}{
+		{name: "defaults", content: "loglevel: info\n", want: models.FireDrillDefault()},
+		{name: "configured", content: "firedrill:\n  duration: 10m\n  errorcount: 7\n", want: models.FireDrill{Duration: 10 * time.Minute, ErrorCount: 7}},
+		{name: "partial", content: "firedrill:\n  errorcount: 7\n", want: models.FireDrill{Duration: 5 * time.Minute, ErrorCount: 7}},
+		{name: "zero duration", content: "firedrill:\n  duration: 0s\n", wantErr: true},
+		{name: "negative error count", content: "firedrill:\n  errorcount: -1\n", wantErr: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(dir, "config.yaml")
+			require.NoError(t, os.WriteFile(path, []byte(c.content), 0600))
+			t.Setenv("CREDENTIALS_DIRECTORY", "")
+			config, err := LoadConfig(path, "", false, zerolog.Nop())
+			if c.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, c.want, config.FireDrill)
+		})
+	}
 }
 
 // Credentials with unexpected names are reported, so a misnamed password does not go unnoticed.

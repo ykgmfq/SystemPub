@@ -32,21 +32,26 @@ go test -mod=vendor ./...
 %install
 install -Dpm 0755 systempub %{buildroot}%{_bindir}/systempub
 install -Dpm 0644 deploy/systempub.service %{buildroot}%{_unitdir}/systempub.service
-# Ship a preset so %%systemd_post enables the unit on first install.
+install -Dpm 0644 deploy/systempub-firedrill.service %{buildroot}%{_unitdir}/systempub-firedrill.service
+install -Dpm 0644 deploy/systempub-firedrill.timer %{buildroot}%{_unitdir}/systempub-firedrill.timer
+# Ship a preset so %%systemd_post enables the service on first install but leaves the fire drill timer off.
 install -Dpm 0644 deploy/85-systempub.preset %{buildroot}%{_presetdir}/85-systempub.preset
 
 %post
-%systemd_post systempub.service
+%systemd_post systempub.service systempub-firedrill.timer
 
 %preun
-%systemd_preun systempub.service
+%systemd_preun systempub.service systempub-firedrill.timer
 
 %postun
 %systemd_postun_with_restart systempub.service
+%systemd_postun systempub-firedrill.timer
 
 %files
 %license LICENSE
 %doc README.md
 %{_bindir}/systempub
 %{_unitdir}/systempub.service
+%{_unitdir}/systempub-firedrill.service
+%{_unitdir}/systempub-firedrill.timer
 %{_presetdir}/85-systempub.preset
